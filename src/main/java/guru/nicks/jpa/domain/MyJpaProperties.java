@@ -13,7 +13,7 @@ import org.springframework.validation.annotation.Validated;
 /**
  * Custom properties - Spring isn't aware of them. The idea is construct a connection URL out of them via placeholders.
  */
-@ConfigurationProperties(prefix = "spring.datasource.my", ignoreUnknownFields = false)
+@ConfigurationProperties(prefix = "spring.datasource.my")
 @Validated
 // immutability
 @Value
