@@ -28,7 +28,11 @@ Pick the most recent version from
 </dependencies>
 ```
 
-This software adheres to the BDD (Behavior-Driven Development) approach. See detailed usage examples in Cucumber
+## Documentation
+
+To browse the API documentation, click [here](https://nicks.guru/commons/commons-jpa-starter/apidocs).
+
+This software adheres to the BDD (Behavior-Driven Development) approach. See module usage examples in Cucumber
 test [scenarios](src/test/resources/cucumber/) and [steps](src/test/java/guru/nicks/cucumber/).
 
 ## Disclaimer
