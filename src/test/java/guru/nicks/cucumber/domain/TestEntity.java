@@ -1,5 +1,10 @@
 package guru.nicks.cucumber.domain;
 
+import guru.nicks.jpa.domain.FullTextSearchAwareEntity;
+import guru.nicks.utils.NgramUtilsConfig;
+
+import jakarta.persistence.Transient;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -7,7 +12,10 @@ import lombok.ToString;
 import lombok.experimental.FieldNameConstants;
 import lombok.experimental.SuperBuilder;
 import lombok.extern.jackson.Jacksonized;
-import org.springframework.data.domain.Persistable;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.function.Supplier;
 
 @NoArgsConstructor
 @Getter
@@ -18,7 +26,13 @@ import org.springframework.data.domain.Persistable;
 @SuperBuilder
 // no @EqualsAndHashCode because entities are supposed to be distinguished by their ID
 @ToString(callSuper = true)
-public class TestEntity implements Persistable<String> {
+public class TestEntity extends FullTextSearchAwareEntity<String> {
+
+    @Getter(value = AccessLevel.PROTECTED, onMethod_ = @Override)
+    @ToString.Exclude
+    @Transient
+    private final Collection<Supplier<String>> fullTextSearchDataSuppliers = List.of(
+            this::getField1, this::getField2, this::getField3);
 
     @Getter(onMethod_ = @Override)
     private String id;
@@ -29,9 +43,12 @@ public class TestEntity implements Persistable<String> {
     private String field2;
     private String field3;
 
+    @ToString.Exclude
+    private String fullTextSearchData;
+
     @Override
-    public boolean isNew() {
-        return (id == null);
+    public NgramUtilsConfig getNgramUtilsConfig() {
+        return NgramUtilsConfig.DEFAULT;
     }
 
 }

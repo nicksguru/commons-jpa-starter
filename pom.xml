@@ -5,7 +5,7 @@
     <parent>
         <groupId>guru.nicks.commons</groupId>
         <artifactId>parent</artifactId>
-        <version>1.2.1</version><!-- [BVM] -->
+        <version>1.3.0</version><!-- [BVM] -->
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -79,11 +79,6 @@
         <dependency>
             <groupId>io.hypersistence</groupId>
             <artifactId>hypersistence-utils-hibernate-62</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.postgresql</groupId>
-            <artifactId>postgresql</artifactId>
         </dependency>
 
         <!-- @Builder, @Slf4j, etc. -->
