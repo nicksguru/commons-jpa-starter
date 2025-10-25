@@ -5,7 +5,7 @@
     <parent>
         <groupId>guru.nicks.commons</groupId>
         <artifactId>parent</artifactId>
-        <version>1.3.2</version><!-- [BVM] -->
+        <version>1.4.0</version><!-- [BVM] -->
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -50,7 +50,7 @@
         </dependency>
         <dependency>
             <groupId>guru.nicks.commons</groupId>
-            <artifactId>utils</artifactId>
+            <artifactId>exception-converter</artifactId>
         </dependency>
         <dependency>
             <groupId>guru.nicks.commons</groupId>
