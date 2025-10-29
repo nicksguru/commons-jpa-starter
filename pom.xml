@@ -5,7 +5,7 @@
     <parent>
         <groupId>guru.nicks.commons</groupId>
         <artifactId>parent</artifactId>
-        <version>1.7.0</version><!-- [BVM] -->
+        <version>1.7.1</version><!-- [BVM] -->
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
