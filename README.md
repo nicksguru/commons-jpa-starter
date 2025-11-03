@@ -13,7 +13,7 @@ Pick the most recent version from
         <dependency>
             <groupId>guru.nicks.commons</groupId>
             <artifactId>bom</artifactId>
-            <version>...</version>
+            <version>25.11.3.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
