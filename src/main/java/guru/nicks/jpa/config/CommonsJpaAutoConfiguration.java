@@ -31,7 +31,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @EnableTransactionManagement
 @EnableJpaAuditing
 @RequiredArgsConstructor
-public class JpaAutoConfiguration {
+public class CommonsJpaAutoConfiguration {
 
     /**
      * Creates a factory for geo (spherical) geometry. It specifies the default Coordinate Reference System (CRS) to be
