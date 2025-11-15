@@ -2,10 +2,19 @@
 
 JPA starter.
 
+## Versioning
+
+The version format is inspired by [Scalver](https://scalver.org) and looks like `M.yymm.N` (in UTC timezone), where:
+
+* `M`  - major version component, same as in [SemVer](https://semver.org) (starts from 0 and increments in case of backwards incompatibility)
+* `yy` - year minus 2000 (25 in 2025, 100 in 2100)
+* `mm` - month (zero-padded: 01 = Jan, 02 = Feb)
+* `N`  - incremental build number, starts from 0 every month
+
 ## Usage
 
-Pick the most recent version from
-[Maven Central](https://central.sonatype.com/namespace/guru.nicks.commons), then use as follows:
+See full version history on
+[Maven Central](https://central.sonatype.com/namespace/guru.nicks.commons), use as follows:
 
 ```xml
 <dependencyManagement>
@@ -13,7 +22,7 @@ Pick the most recent version from
         <dependency>
             <groupId>guru.nicks.commons</groupId>
             <artifactId>bom</artifactId>
-            <version>1.17.1</version>
+            <version>1.2511.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
