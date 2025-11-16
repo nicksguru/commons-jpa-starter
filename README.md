@@ -1,6 +1,8 @@
 # [Nicks.Guru](https://nicks.guru) Commons JPA Starter
 
-![Latest version](https://img.shields.io/maven-central/v/guru.nicks.commons/jpa-starter?filter=!25.*&label=Latest%20version:&cacheSeconds=7200) ![Release date](https://img.shields.io/maven-central/last-update/guru.nicks.commons/jpa-starter?label=&color=orange&cacheSeconds=7200)
+:rocket:
+![Latest version](https://img.shields.io/maven-central/v/guru.nicks.commons/jpa-starter?filter=!25.*&label=Latest%20version:&cacheSeconds=7200)
+![Release date](https://img.shields.io/maven-central/last-update/guru.nicks.commons/jpa-starter?label=&color=orange&cacheSeconds=7200)
 
 JPA starter.
 
@@ -8,9 +10,9 @@ JPA starter.
 
 The version format is inspired by [Scalver](https://scalver.org) and looks like `M.yymm.N` (in UTC timezone), where:
 
-* `M`  - major version component, same as in [SemVer](https://semver.org) (starts from 0 and increments in case of backwards incompatibility)
-* `yy` - year minus 2000 (25 in 2025, 100 in 2100)
-* `mm` - month (zero-padded: 01 = Jan, 02 = Feb)
+* `M`  - major version, same as in [SemVer](https://semver.org): starts from 0, increments in case of backwards incompatibility
+* `yy` - year minus 2000: 25 for 2025, 100 for 2100
+* `mm` - month (zero-padded): 01 = Jan, 02 = Feb, 12 = Dec
 * `N`  - incremental build number, starts from 0 every month
 
 ## Usage
