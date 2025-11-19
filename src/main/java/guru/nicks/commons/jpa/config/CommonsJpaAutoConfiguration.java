@@ -5,7 +5,7 @@ import guru.nicks.commons.jpa.domain.GeometryFactoryType;
 import guru.nicks.commons.jpa.domain.MyJpaProperties;
 
 import jakarta.persistence.EntityManagerFactory;
-import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.geolatte.geom.codec.Wkb;
 import org.geolatte.geom.crs.CoordinateReferenceSystems;
 import org.hibernate.annotations.JdbcType;
@@ -30,7 +30,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @EnableConfigurationProperties(MyJpaProperties.class)
 @EnableTransactionManagement
 @EnableJpaAuditing
-@RequiredArgsConstructor
+@Slf4j
 public class CommonsJpaAutoConfiguration {
 
     /**
@@ -46,6 +46,7 @@ public class CommonsJpaAutoConfiguration {
     @GeometryFactoryQualifier(GeometryFactoryType.GEO)
     @Bean
     public GeometryFactory geoGeometryFactory() {
+        log.debug("Building {} ({}) bean", GeometryFactory.class.getSimpleName(), GeometryFactoryType.GEO.name());
         return new GeometryFactory(new PrecisionModel(), CoordinateReferenceSystems.WGS84.getCrsId().getCode());
     }
 
@@ -60,6 +61,7 @@ public class CommonsJpaAutoConfiguration {
     @GeometryFactoryQualifier(GeometryFactoryType.PLANAR)
     @Bean
     public GeometryFactory planarGeometryFactory() {
+        log.debug("Building {} ({}) bean", GeometryFactory.class.getSimpleName(), GeometryFactoryType.PLANAR.name());
         return new GeometryFactory();
     }
 
@@ -72,6 +74,7 @@ public class CommonsJpaAutoConfiguration {
     @ConditionalOnMissingBean(Wkb.Dialect.class)
     @Bean
     public Wkb.Dialect wkbDialect() {
+        log.debug("Building {} bean", Wkb.Dialect.class.getSimpleName());
         return Wkb.Dialect.POSTGIS_EWKB_2;
     }
 
@@ -86,6 +89,7 @@ public class CommonsJpaAutoConfiguration {
     @Bean
     @Primary
     public TransactionTemplate transactionTemplate(PlatformTransactionManager transactionManager) {
+        log.debug("Building {} bean", TransactionTemplate.class.getSimpleName());
         return new TransactionTemplate(transactionManager);
     }
 
@@ -100,6 +104,7 @@ public class CommonsJpaAutoConfiguration {
     @Bean
     @Primary
     public PlatformTransactionManager transactionManager(EntityManagerFactory entityManagerFactory) {
+        log.debug("Building {} bean", PlatformTransactionManager.class.getSimpleName());
         var transactionManager = new JpaTransactionManager();
         transactionManager.setEntityManagerFactory(entityManagerFactory);
         return transactionManager;
