@@ -3,7 +3,7 @@ package guru.nicks.commons.cucumber;
 import guru.nicks.commons.cucumber.domain.TestEntity;
 import guru.nicks.commons.jpa.domain.FullTextSearchAwareEntity;
 import guru.nicks.commons.jpa.repository.EnhancedJpaRepository;
-import guru.nicks.commons.utils.NgramUtils;
+import guru.nicks.commons.utils.text.NgramUtils;
 
 import io.cucumber.datatable.DataTable;
 import io.cucumber.java.en.Given;

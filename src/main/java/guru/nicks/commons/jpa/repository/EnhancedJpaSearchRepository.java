@@ -3,9 +3,9 @@ package guru.nicks.commons.jpa.repository;
 import guru.nicks.commons.ApplicationContextHolder;
 import guru.nicks.commons.cache.domain.CacheConstants;
 import guru.nicks.commons.jpa.domain.FullTextSearchAwareEntity;
-import guru.nicks.commons.utils.NgramUtils;
-import guru.nicks.commons.utils.NgramUtilsConfig;
 import guru.nicks.commons.utils.ReflectionUtils;
+import guru.nicks.commons.utils.text.NgramUtils;
+import guru.nicks.commons.utils.text.NgramUtilsConfig;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

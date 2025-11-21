@@ -2,9 +2,9 @@ package guru.nicks.commons.jpa.domain;
 
 import guru.nicks.commons.jpa.repository.EnhancedJpaDialect;
 import guru.nicks.commons.jpa.repository.EnhancedJpaRepository;
-import guru.nicks.commons.utils.ChecksumUtils;
-import guru.nicks.commons.utils.NgramUtils;
-import guru.nicks.commons.utils.NgramUtilsConfig;
+import guru.nicks.commons.utils.crypto.ChecksumUtils;
+import guru.nicks.commons.utils.text.NgramUtils;
+import guru.nicks.commons.utils.text.NgramUtilsConfig;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.annotation.Nonnull;

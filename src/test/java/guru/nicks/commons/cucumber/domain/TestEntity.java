@@ -1,7 +1,7 @@
 package guru.nicks.commons.cucumber.domain;
 
 import guru.nicks.commons.jpa.domain.FullTextSearchAwareEntity;
-import guru.nicks.commons.utils.NgramUtilsConfig;
+import guru.nicks.commons.utils.text.NgramUtilsConfig;
 
 import jakarta.persistence.Transient;
 import lombok.AccessLevel;
@@ -28,21 +28,17 @@ import java.util.function.Supplier;
 @ToString(callSuper = true)
 public class TestEntity extends FullTextSearchAwareEntity<String> {
 
+    @Getter(onMethod_ = @Override)
+    private String id;
+    private String name;
+    private String field1;
+    private String field2;
+    private String field3;
     @Getter(value = AccessLevel.PROTECTED, onMethod_ = @Override)
     @ToString.Exclude
     @Transient
     private final Collection<Supplier<String>> fullTextSearchDataSuppliers = List.of(
             this::getField1, this::getField2, this::getField3);
-
-    @Getter(onMethod_ = @Override)
-    private String id;
-
-    private String name;
-
-    private String field1;
-    private String field2;
-    private String field3;
-
     @ToString.Exclude
     private String fullTextSearchData;
 
