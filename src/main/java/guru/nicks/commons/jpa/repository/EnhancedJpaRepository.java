@@ -5,7 +5,7 @@ import guru.nicks.commons.utils.ReflectionUtils;
 
 import jakarta.persistence.EntityGraph;
 import jakarta.persistence.EntityManager;
-import org.apache.commons.collections4.IterableUtils;
+import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.BeanInstantiationException;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.context.ApplicationContext;
@@ -21,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -40,7 +39,7 @@ import java.util.stream.Stream;
  *
  * @param <T>  entity type
  * @param <ID> primary key type
- * @param <E>  exception type to throw when entity is not found - must have a constructor accepting a message
+ * @param <E>  exception type to throw when entity is not found
  */
 @NoRepositoryBean
 @SuppressWarnings("java:S119")  // allow type names like 'ID'
@@ -105,6 +104,16 @@ public interface EnhancedJpaRepository<T extends Persistable<ID>, ID, E extends 
     }
 
     /**
+     * Creates an entity graph for {@link #getEntityClass()}.
+     *
+     * @return entity graph
+     * @see #findByIdWithFetchGraph(Object, EntityGraph)
+     */
+    default EntityGraph<T> createEntityGraph() {
+        return getEntityManagerBean().createEntityGraph(getEntityClass());
+    }
+
+    /**
      * Finds an entity by its ID using the specified entity graph for fetch optimization.
      * <p>
      * This method allows for fine-grained control over which entity attributes and associations are eagerly loaded by
@@ -113,34 +122,28 @@ public interface EnhancedJpaRepository<T extends Persistable<ID>, ID, E extends 
      *
      * @param id    primary key
      * @param graph entity graph defining which attributes and associations to fetch eagerly; must not be {@code null}
-     * @return an {@link Optional} containing the entity if found, or {@link Optional#empty()} if not found
+     * @return optional entity
      */
-    default Optional<T> findUsingFetchGraph(ID id, EntityGraph<T> graph) {
+    @Transactional(readOnly = true)
+    default Optional<T> findByIdWithFetchGraph(ID id, EntityGraph<T> graph) {
         Map<String, Object> hints = Map.of(EntityGraphType.FETCH.getKey(), graph);
-        return Optional.ofNullable(getEntityManagerBean().find(getEntityClass(), id, hints));
+
+        return Optional.ofNullable(getEntityManagerBean()
+                .find(getEntityClass(), id, hints));
     }
 
     /**
-     * Creates an entity graph for {@link #getEntityClass()}.
-     *
-     * @return entity graph, needed for example for {@link EntityGraph#addAttributeNodes(String...)}
-     */
-    default EntityGraph<T> createEntityGraph() {
-        return getEntityManagerBean().createEntityGraph(getEntityClass());
-    }
-
-    /**
-     * Does the same as {@link #findById(Object)} but throws an exception of type {@code E} if entity is not found.
+     * Does the same as {@link #findById(Object)} but throws an exception if entity is not found.
      *
      * @param id entity ID
      * @return entity
-     * @throws E                          entity not found (the exception message contains the stringified {@code id})
-     * @throws BeanInstantiationException {@code E} exception constructor not found or failed
+     * @throws E                          entity not found
+     * @throws BeanInstantiationException {@code E}'s argument-less constructor failed
      */
     @Transactional(readOnly = true)
     default T getByIdOrThrow(ID id) {
         return findById(id).orElseThrow(() ->
-                ReflectionUtils.instantiateWithConstructor(getExceptionClass(), Objects.toString(id, null)));
+                ReflectionUtils.instantiateEvenWithoutDefaultConstructor(getExceptionClass()));
     }
 
     /**
@@ -153,14 +156,16 @@ public interface EnhancedJpaRepository<T extends Persistable<ID>, ID, E extends 
      */
     @Transactional(readOnly = true)
     default List<T> findAllByIdPreserveOrder(Collection<ID> ids) {
-        // need indexOf() which only List has
-        List<ID> list = (ids instanceof List<ID> lst)
-                ? lst
-                : IterableUtils.toList(ids);
+        if (CollectionUtils.isEmpty(ids)) {
+            return new ArrayList<>();
+        }
 
-        return findAllById(list)
-                .stream()
-                .sorted(Comparator.comparing(entity -> list.indexOf(entity.getId())))
+        Map<ID, T> foundEntities = findAllById(ids).stream()
+                .collect(Collectors.toMap(Persistable::getId, entity -> entity));
+
+        return ids.stream()
+                .map(foundEntities::get)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toCollection(ArrayList::new));
     }
 
@@ -191,5 +196,48 @@ public interface EnhancedJpaRepository<T extends Persistable<ID>, ID, E extends 
      */
     @Transactional(readOnly = true)
     Stream<T> findAllBy();
+
+    /**
+     * Saves a collection of entities in batches of {@value #RECOMMENDED_BATCH_SIZE}, flushing and clearing the
+     * persistence context after each batch. This is more memory-efficient for bulk operations than
+     * {@link #saveAll(Iterable)}.
+     *
+     * @param entities entities to save, must not be {@code null}
+     * @return saved entities
+     */
+    @Transactional
+    default List<T> saveAllAndFlushInBatches(Collection<T> entities) {
+        return saveAllAndFlushInBatches(entities, RECOMMENDED_BATCH_SIZE);
+    }
+
+    /**
+     * Saves a collection of entities in batches, flushing and clearing the persistence context after each batch. This
+     * is more memory-efficient for bulk operations than {@link #saveAll(Iterable)}.
+     *
+     * @param entities  entities to save, must not be {@code null}
+     * @param batchSize size of each batch
+     * @return saved entities
+     */
+    @Transactional
+    default List<T> saveAllAndFlushInBatches(Collection<T> entities, int batchSize) {
+        if (CollectionUtils.isEmpty(entities)) {
+            return new ArrayList<>();
+        }
+
+        List<T> savedEntities = new ArrayList<>(entities.size());
+        int i = 0;
+
+        for (T entity : entities) {
+            savedEntities.add(save(entity));
+            i++;
+
+            if (i % batchSize == 0) {
+                flush();
+                getEntityManagerBean().clear();
+            }
+        }
+
+        return savedEntities;
+    }
 
 }
