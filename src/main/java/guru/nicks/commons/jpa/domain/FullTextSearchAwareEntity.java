@@ -30,7 +30,6 @@ import org.springframework.data.domain.Sort;
 import java.util.Collection;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static guru.nicks.commons.validation.dsl.ValiDsl.checkNotNull;
@@ -76,7 +75,7 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
     /**
      * Non-existing property name which indicates the intention to sort by the search rank (desc).
      *
-     * @see #initSortCriteria(Object, Function, Pageable)
+     * @see #initSortCriteria(Object, Supplier, Pageable)
      */
     public static final String SEARCH_RANK_PSEUDOFIELD = "_searchRank";
 
@@ -117,16 +116,15 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
      * <p>
      * The above means that if caller specified sort by search rank (asc), this method overrides it with 'desc'.
      *
-     * @param filter               search filter (nullable)
-     * @param fullTextSearchGetter retrieves search text from the filter (if the filter is non-null); may return
-     *                             {@code null}
-     * @param pageable             pagination request
-     * @param <F>                  search filter type
+     * @param filter                 search filter (nullable)
+     * @param fullTextSearchSupplier supplies full-text search string, if any; may return {@code null}
+     * @param pageable               pagination request
+     * @param <F>                    search filter type
      * @return old pagination request if sort criteria were already there, new request otherwise
      */
-    public static <F> Pageable initSortCriteria(@Nullable F filter, Function<F, String> fullTextSearchGetter,
+    public static <F> Pageable initSortCriteria(@Nullable F filter, Supplier<String> fullTextSearchSupplier,
             Pageable pageable) {
-        checkNotNull(fullTextSearchGetter, "fullTextSearchGetter");
+        checkNotNull(fullTextSearchSupplier, "fullTextSearchGetter");
         checkNotNull(pageable, "pageable");
 
         // caller intends to sort, but not by search rank
@@ -135,8 +133,7 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
         }
 
         // sort by search rank (desc, even if caller specified asc) or by date of creation (desc)
-        String sortField = Optional.ofNullable(filter)
-                .map(fullTextSearchGetter)
+        String sortField = Optional.ofNullable(fullTextSearchSupplier.get())
                 .filter(StringUtils::isNotBlank)
                 .map(f -> SEARCH_RANK_PSEUDOFIELD)
                 .orElse(AuditableEntity.Fields.createdDate);
@@ -156,6 +153,11 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
      */
     public abstract String getFullTextSearchData();
 
+    /**
+     * Sets the full-text search data. Typically called internally when search ngrams are rebuilt.
+     *
+     * @param value the generated n-gram string to be persisted.
+     */
     public abstract void setFullTextSearchData(String value);
 
     /**

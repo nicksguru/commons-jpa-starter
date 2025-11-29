@@ -61,8 +61,8 @@ public class FullTextSearchAwareEntitySteps {
             pageable = PageRequest.of(pageNumber, pageSize);
         }
 
-        resultPageable = FullTextSearchAwareEntity.initSortCriteria(searchFilter,
-                TestSearchFilter::getSearchText, pageable);
+        resultPageable = FullTextSearchAwareEntity.initSortCriteria(searchFilter, searchFilter::getSearchText,
+                pageable);
     }
 
     @Then("the pageable should have page {int} and size {int}")
