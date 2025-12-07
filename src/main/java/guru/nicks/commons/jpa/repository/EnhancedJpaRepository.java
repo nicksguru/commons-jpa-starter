@@ -1,6 +1,7 @@
 package guru.nicks.commons.jpa.repository;
 
 import guru.nicks.commons.ApplicationContextHolder;
+import guru.nicks.commons.jpa.domain.JpaConstants;
 import guru.nicks.commons.utils.ReflectionUtils;
 
 import jakarta.persistence.EntityGraph;
@@ -45,11 +46,6 @@ import java.util.stream.Stream;
 @SuppressWarnings("java:S119")  // allow type names like 'ID'
 public interface EnhancedJpaRepository<T extends Persistable<ID>, ID, E extends RuntimeException>
         extends JpaRepository<T, ID>, QuerydslPredicateExecutor<T> {
-
-    /**
-     * Recommended value for <b>internal</b> paginated operations.
-     */
-    int RECOMMENDED_BATCH_SIZE = 500;
 
     /**
      * @see #getDialect()
@@ -198,7 +194,7 @@ public interface EnhancedJpaRepository<T extends Persistable<ID>, ID, E extends 
     Stream<T> findAllBy();
 
     /**
-     * Saves a collection of entities in batches of {@value #RECOMMENDED_BATCH_SIZE}, flushing and clearing the
+     * Saves a collection of entities in batches of {@link JpaConstants#INTERNAL_PAGE_SIZE}, flushing and clearing the
      * persistence context after each batch. This is more memory-efficient for bulk operations than
      * {@link #saveAll(Iterable)}.
      *
@@ -207,7 +203,7 @@ public interface EnhancedJpaRepository<T extends Persistable<ID>, ID, E extends 
      */
     @Transactional
     default List<T> saveAllAndFlushInBatches(Collection<T> entities) {
-        return saveAllAndFlushInBatches(entities, RECOMMENDED_BATCH_SIZE);
+        return saveAllAndFlushInBatches(entities, JpaConstants.INTERNAL_PAGE_SIZE);
     }
 
     /**
