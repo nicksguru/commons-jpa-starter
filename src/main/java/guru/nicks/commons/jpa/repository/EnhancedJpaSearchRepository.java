@@ -49,7 +49,7 @@ import java.util.regex.Pattern;
 /**
  * Search-related enhancements for JPA repositories. Subclasses must implement:
  * <ul>
- *     <li>{@link #convertToSearchPredicate(Object)}</li>
+ *     <li>{@link #convertToSearchBuilder(Object)}</li>
  *     <li>{@link #findByFilter(Object, Pageable)}</li>
  * </ul>
  *
@@ -68,6 +68,11 @@ public interface EnhancedJpaSearchRepository<T extends Persistable<ID>, ID, E ex
      */
     Class<?> STATIC_THIS = MethodHandles.lookup().lookupClass();
 
+    /**
+     * A predicate that validates if a given string is a valid SQL column name. It allows names starting with a letter
+     * or underscore, followed by letters, digits, or underscores. This is useful for preventing SQL injection in
+     * dynamically constructed query parts.
+     */
     java.util.function.Predicate<String> SQL_COLUMN_NAME_PREDICATE = Pattern
             .compile("^[a-zA-Z_][a-zA-Z0-9_]*$")
             .asMatchPredicate();
@@ -83,10 +88,10 @@ public interface EnhancedJpaSearchRepository<T extends Persistable<ID>, ID, E ex
             .build();
 
     /**
-     * Converts search filter request to QueryDSL predicate. If there's no implementation, Spring Data tries to generate
-     * some code for this method and fails with
-     * {@code No property 'convertToSearchPredicate' found for type 'SomeEntity'}. Therefore, even if the filter type is
-     * {@link Void}, an empty implementation is needed in subclasses.
+     * Converts search filter request to QueryDSL predicate builder. If there's no implementation, Spring Data tries to
+     * generate some code for this method and fails with
+     * {@code No property 'convertToSearchBuilder' found for type 'SomeEntity'}. Therefore, even if the filter type is
+     * {@link Void}, a <b>do-nothing implementation must be present in subclasses</b>.
      * <p>
      * NOTE: don't add full-text search query to the predicate created -  it's processed in a special way by
      * {@link #findByFilter(Object, Supplier, Pageable, EntityPathBase, Supplier)}.
@@ -94,7 +99,7 @@ public interface EnhancedJpaSearchRepository<T extends Persistable<ID>, ID, E ex
      * @param filter search filter
      * @return predicate ({@link Optional#empty()} if there's no search condition, including {@code null} filter)
      */
-    BooleanBuilder convertToSearchPredicate(F filter);
+    BooleanBuilder convertToSearchBuilder(F filter);
 
     /**
      * Finds entities by filter. Subclasses must implement this with {@code @Transactional(readOnly = true)} and call
@@ -137,13 +142,13 @@ public interface EnhancedJpaSearchRepository<T extends Persistable<ID>, ID, E ex
                 .select(queryDslEntity)
                 .from(queryDslEntity);
 
-        BooleanBuilder predicate = convertToSearchPredicate(filter);
+        BooleanBuilder searchBuilder = convertToSearchBuilder(filter);
         Pageable oldPageable = pageable;
-        pageable = setupFullTextSearch(fullTextSearchSupplier, pageable, queryDslEntity, predicate, searchQuery);
+        pageable = setupFullTextSearch(fullTextSearchSupplier, pageable, queryDslEntity, searchBuilder, searchQuery);
 
         // no FTS
         if (pageable == oldPageable) {
-            searchQuery.where(predicate);
+            searchQuery.where(searchBuilder);
             applyPaginationAndSort(searchQuery, pageable, queryDslEntity);
         }
 
@@ -154,7 +159,7 @@ public interface EnhancedJpaSearchRepository<T extends Persistable<ID>, ID, E ex
         var countQuery = new JPAQuery<>(getEntityManagerBean())
                 .select(queryDslEntity.count())
                 .from(queryDslEntity)
-                .where(predicate);
+                .where(searchBuilder);
 
         // this is how Spring Data applies pagination to queries (the query is already limited, see above)
         return PageableExecutionUtils.getPage(searchQuery.fetch(), pageable, countQuery::fetchOne);
@@ -273,18 +278,17 @@ public interface EnhancedJpaSearchRepository<T extends Persistable<ID>, ID, E ex
      * @param fullTextSearchSupplier supplier for full-text search text, returns {@code null} if FTS is not needed
      * @param pageable               pagination/sorting request
      * @param queryDslEntity         retrieved from QueryDSL as {@code QSomeEntity.someEntity}
-     * @param predicate              already existing (possibly empty) QueryDSL predicate
+     * @param searchBuider           already existing (possibly empty) QueryDSL predicate
      * @param query                  can have {@code SELECT} and {@code FROM} clauses only (no pagination or sorting)
      * @return {@code pageable} argument if no full-text search has been stored in {@code searchQuery}, or a new
      *         {@code pageable} object otherwise (with sort criteria possibly altered as described above)
      * @throws IllegalArgumentException {@link #getEntityClass()} doesn't extend {@link FullTextSearchAwareEntity}
      */
     private Pageable setupFullTextSearch(Supplier<String> fullTextSearchSupplier, Pageable pageable,
-            EntityPathBase<T> queryDslEntity, BooleanBuilder predicate, JPAQuery<T> query) {
-        String text = Optional.ofNullable(fullTextSearchSupplier.get())
-                .filter(StringUtils::isNotBlank)
-                .orElse(null);
-        if (text == null) {
+            EntityPathBase<T> queryDslEntity, BooleanBuilder searchBuider, JPAQuery<T> query) {
+        String fts = fullTextSearchSupplier.get();
+        // if no FTS was requested, don't check entity class (see below)
+        if (StringUtils.isBlank(fts)) {
             return pageable;
         }
 
@@ -295,7 +299,7 @@ public interface EnhancedJpaSearchRepository<T extends Persistable<ID>, ID, E ex
                     + "] to support full-text search");
         }
 
-        Set<String> ngrams = NgramUtils.createNgrams(text, NgramUtils.Mode.ALL, getNgramUtilsConfig());
+        Set<String> ngrams = NgramUtils.createNgrams(fts, NgramUtils.Mode.ALL, getNgramUtilsConfig());
         // special characters are stripped off, so there's no risk of SQL injection, but validate anyway
         if (ngrams.stream().anyMatch(ngram ->
                 ngram.contains("'") || ngram.contains("\"") || ngram.contains("--") || ngram.contains(";"))) {
@@ -308,14 +312,26 @@ public interface EnhancedJpaSearchRepository<T extends Persistable<ID>, ID, E ex
         // invalid positional argument indexes (seems their bug)
         String sql = String.format(Locale.US, EnhancedJpaRepository.getDialect().getFullTextSearchTemplate(),
                 FullTextSearchAwareEntity.FULL_TEXT_SEARCH_DATA_PROPERTY, q);
-        predicate.and(Expressions.booleanTemplate(sql));
-        query.where(predicate);
+        searchBuider.and(Expressions.booleanTemplate(sql));
+        query.where(searchBuider);
 
         return fixSortCriteria(pageable, queryDslEntity, query, q);
     }
 
+    /**
+     * Adjusts the sorting criteria for FTS. If the original {@code pageable} specifies a sort order other than by
+     * {@value FullTextSearchAwareEntity#SEARCH_RANK_PSEUDOFIELD}, that order is applied. Otherwise, the query is sorted
+     * by search rank in descending order.
+     *
+     * @param pageable       The original pagination and sorting request.
+     * @param queryDslEntity The QueryDSL entity path for the query.
+     * @param query          The JPAQuery object to which the sorting and pagination will be applied.
+     * @param q              The full-text search query string used to calculate the search rank.
+     * @return A new {@link Pageable} object reflecting the applied sort criteria. This will be a clone of the original
+     *         if its sort was used, or a new instance with sorting by search rank.
+     */
     private Pageable fixSortCriteria(Pageable pageable, EntityPathBase<T> queryDslEntity, JPAQuery<T> query, String q) {
-        // caller intends to sort, but not by search rank
+        // caller intends to sort, but not by search rank - do it
         if (pageable.getSort().isSorted()
                 && (pageable.getSort().getOrderFor(FullTextSearchAwareEntity.SEARCH_RANK_PSEUDOFIELD) == null)) {
             applyPaginationAndSort(query, pageable, queryDslEntity);
@@ -326,10 +342,10 @@ public interface EnhancedJpaSearchRepository<T extends Persistable<ID>, ID, E ex
                     : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), pageable.getSort());
         }
 
-        // WARNING: don't pass '{0}' to stringTemplate(), rather embed the value, or the query generated will have
-        // invalid positional argument indexes (seems their bug)
         String sql = String.format(Locale.US, EnhancedJpaRepository.getDialect().getFullTextSearchRankTemplate(),
                 FullTextSearchAwareEntity.FULL_TEXT_SEARCH_DATA_PROPERTY, q);
+        // WARNING: don't pass '{0}' to stringTemplate(), rather embed the value, or the query generated will have
+        // invalid positional argument indexes (seems their bug)
         StringTemplate sortBySearchRank = Expressions.stringTemplate(sql);
 
         // sort by search rank (always desc) which is an SQL function
@@ -350,13 +366,16 @@ public interface EnhancedJpaSearchRepository<T extends Persistable<ID>, ID, E ex
      * instantiation. If not found in cache, instantiates the entity class (even without a default constructor) and
      * retrieves its {@link FullTextSearchAwareEntity#getNgramUtilsConfig()}.
      * <p>
-     * WARNING: this approach assumes that the ngram configuration is the same for all instances of the given class.
+     * NOTE: this approach assumes that the <b>ngram configuration is the same for all instances of each class</b>.
      *
      * @return the ngram configuration for the entity class
      */
     private NgramUtilsConfig getNgramUtilsConfig() {
+        // 'get' method may return null as per Caffeine specs, but never does in this particular case
+        //noinspection DataFlowIssue
         return NGRAM_CONFIG_CACHE.get(getEntityClass(), clazz -> {
-            var tmpEntity = (FullTextSearchAwareEntity) ReflectionUtils.instantiateEvenWithoutDefaultConstructor(clazz);
+            var tmpEntity = (FullTextSearchAwareEntity<?>)
+                    ReflectionUtils.instantiateEvenWithoutDefaultConstructor(clazz);
             return tmpEntity.getNgramUtilsConfig();
         });
     }

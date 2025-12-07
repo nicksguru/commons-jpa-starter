@@ -206,7 +206,7 @@ public class EnhancedJpaSearchRepositorySteps {
         var filter = TestFilter.builder()
                 .text(jpaWorld.getSearchText())
                 .build();
-        booleanBuilder = testRepository.convertToSearchPredicate(filter);
+        booleanBuilder = testRepository.convertToSearchBuilder(filter);
     }
 
     @When("entities are found by filter")
@@ -374,7 +374,7 @@ public class EnhancedJpaSearchRepositorySteps {
 
         @Nonnull
         @Override
-        public BooleanBuilder convertToSearchPredicate(@Nonnull TestFilter filter) {
+        public BooleanBuilder convertToSearchBuilder(@Nonnull TestFilter filter) {
             var builder = new BooleanBuilder();
 
             if ((filter != null) && (filter.getText() != null) && !filter.getText().isBlank()) {

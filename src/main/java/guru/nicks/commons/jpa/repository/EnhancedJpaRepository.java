@@ -77,7 +77,7 @@ public interface EnhancedJpaRepository<T extends Persistable<ID>, ID, E extends 
     default Class<T> getEntityClass() {
         return (Class<T>) ReflectionUtils
                 .findMaterializedGenericType(getClass(), STATIC_THIS, Persistable.class)
-                .orElseThrow(() -> new IllegalStateException("Failed to find entity class"));
+                .orElseThrow(() -> new IllegalStateException("Failed to infer entity class"));
     }
 
     /**
@@ -88,7 +88,7 @@ public interface EnhancedJpaRepository<T extends Persistable<ID>, ID, E extends 
     default Class<E> getExceptionClass() {
         return (Class<E>) ReflectionUtils
                 .findMaterializedGenericType(getClass(), STATIC_THIS, Throwable.class)
-                .orElseThrow(() -> new IllegalStateException("Failed to find generic exception type"));
+                .orElseThrow(() -> new IllegalStateException("Failed to infer exception type"));
     }
 
     /**
