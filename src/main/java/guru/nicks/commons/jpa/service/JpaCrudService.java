@@ -9,10 +9,10 @@ import org.springframework.data.domain.Persistable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.support.SimpleJpaRepository;
 
+import java.io.Serializable;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Stream;
 
 /**
  * {@link SimpleJpaRepository} (Spring Data's implementation of {@link JpaRepository}) has
@@ -20,7 +20,8 @@ import java.util.stream.Stream;
  * which means everything is transactional.
  */
 @SuppressWarnings("java:S119")  // allow type names like 'ID'
-public interface JpaCrudService<T extends Persistable<ID>, ID> extends CrudService<T, ID> {
+@FunctionalInterface
+public interface JpaCrudService<T extends Persistable<ID>, ID extends Serializable> extends CrudService<T, ID> {
 
     @Override
     default T save(T entity) {
@@ -67,23 +68,13 @@ public interface JpaCrudService<T extends Persistable<ID>, ID> extends CrudServi
         return getRepository().findAllByIdPreserveOrder(ids);
     }
 
-    // no transaction because DB cursor is returned
-    @Override
-    default Stream<T> findAllAsStream() {
-        return getRepository().findAllAsStream();
-    }
-
     @Override
     default Page<T> findAll(Pageable pageable) {
         return getRepository().findAll(pageable);
     }
 
     /**
-     * Returns repository which deals with {@code T} entities. Can't be just
-     * {@link org.springframework.data.jpa.repository.JpaRepository} because
-     * {@link EnhancedJpaRepository#findAllAsStream()} is needed.
-     *
-     * @return repository
+     * @return repository which deals with {@code T} entities.
      */
     EnhancedJpaRepository<T, ID, ?> getRepository();
 

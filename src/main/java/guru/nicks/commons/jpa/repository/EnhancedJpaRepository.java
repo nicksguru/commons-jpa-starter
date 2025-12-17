@@ -1,42 +1,29 @@
 package guru.nicks.commons.jpa.repository;
 
-import guru.nicks.commons.ApplicationContextHolder;
+import guru.nicks.commons.jpa.domain.EnhancedSqlDialect;
 import guru.nicks.commons.jpa.domain.JpaConstants;
-import guru.nicks.commons.utils.ReflectionUtils;
+import guru.nicks.commons.jpa.impl.EnhancedJpaRepositoryImpl;
 
 import jakarta.persistence.EntityGraph;
-import jakarta.persistence.EntityManager;
-import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.BeanInstantiationException;
-import org.springframework.beans.factory.NoSuchBeanDefinitionException;
-import org.springframework.context.ApplicationContext;
-import org.springframework.data.domain.Pageable;
+import org.springframework.core.env.Environment;
 import org.springframework.data.domain.Persistable;
-import org.springframework.data.jpa.repository.EntityGraph.EntityGraphType;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.support.SimpleJpaRepository;
 import org.springframework.data.querydsl.QuerydslPredicateExecutor;
 import org.springframework.data.repository.NoRepositoryBean;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.lang.invoke.MethodHandles;
-import java.util.ArrayList;
+import java.io.Serializable;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import java.util.function.Predicate;
+import java.util.regex.Pattern;
 
 /**
- * A combination of common JPA-related repository interfaces augmented with some custom functionality.
+ * A combination of common JPA-related repository interfaces augmented with some custom functionality. Used implicitly
+ * via {@link EnhancedJpaRepositoryFactoryBean}.
  * <p>
- * {@link SimpleJpaRepository} (Spring Data implementation of {@link JpaRepository}) has
- * {@code @Transactional(readOnly=true)} at the class level and {@code Transactional} on methods that write something -
- * this interface does the same. This means transactions are created on the fly if caller has not created them.
- * <p>
- * WARNING: Spring Data wraps all non-static repository methods in a decorator that rejects null arguments.
+ * NOTE: Spring Data wraps all non-static repository methods in a decorator that rejects null arguments.
  *
  * @param <T>  entity type
  * @param <ID> primary key type
@@ -44,73 +31,66 @@ import java.util.stream.Stream;
  */
 @NoRepositoryBean
 @SuppressWarnings("java:S119")  // allow type names like 'ID'
-public interface EnhancedJpaRepository<T extends Persistable<ID>, ID, E extends RuntimeException>
+public interface EnhancedJpaRepository<T extends Persistable<ID>,
+        ID extends Serializable,
+        E extends RuntimeException>
         extends JpaRepository<T, ID>, QuerydslPredicateExecutor<T> {
 
     /**
-     * @see #getDialect()
+     * @see #getSqlDialect()
      */
-    String DIALECT_PROPERTY_NAME = "app.database.dialect";
-
-    Class<?> STATIC_THIS = MethodHandles.lookup().lookupClass();
+    String SQL_DIALECT_PROPERTY_NAME = "app.database.dialect";
 
     /**
-     * @return SQL dialect read from the {@value #DIALECT_PROPERTY_NAME} config property, or
-     *         {@link EnhancedJpaDialect#POSTGRES} if there's no such property / no app context
+     * @see #getSqlDialect()
      */
-    static EnhancedJpaDialect getDialect() {
-        return ApplicationContextHolder.findApplicationContext()
-                .map(ApplicationContext::getEnvironment)
-                .map(env -> env.getProperty(DIALECT_PROPERTY_NAME, EnhancedJpaDialect.class))
-                .orElse(EnhancedJpaDialect.POSTGRES);
-    }
+    EnhancedSqlDialect DEFAULT_SQL_DIALECT = EnhancedSqlDialect.POSTGRES;
 
     /**
+     * A predicate that validates if a given string is a valid SQL column name. It allows names starting with a letter
+     * or underscore, followed by letters, digits, or underscores. This is useful for preventing SQL injection in
+     * dynamically constructed query parts.
+     */
+    Predicate<String> SQL_COLUMN_NAME_PREDICATE = Pattern
+            .compile("^[a-zA-Z_][a-zA-Z0-9_]*$")
+            .asMatchPredicate();
+
+    /**
+     * Returns the SQL dialect configured for this repository. This method is implemented in
+     * {@link EnhancedJpaRepositoryImpl} which has access to the injected {@link Environment} and falls back on
+     * {@link #DEFAULT_SQL_DIALECT}.
+     *
+     * @return SQL dialect
+     */
+    EnhancedSqlDialect getSqlDialect();
+
+    /**
+     * Implemented in {@link EnhancedJpaRepositoryImpl}.
+     *
      * @return class of type {@code T}
      * @throws IllegalStateException if the entity class is not found in the generic type parameters
      */
-    @SuppressWarnings("unchecked")
-    default Class<T> getEntityClass() {
-        return (Class<T>) ReflectionUtils
-                .findMaterializedGenericType(getClass(), STATIC_THIS, Persistable.class)
-                .orElseThrow(() -> new IllegalStateException("Failed to infer entity class"));
-    }
+    Class<T> getEntityClass();
 
     /**
+     * Implemented in {@link EnhancedJpaRepositoryImpl}.
+     *
      * @return class of type {@code E}
      * @throws IllegalStateException if the exception class is not found in the generic type parameters
      */
-    @SuppressWarnings("unchecked")
-    default Class<E> getExceptionClass() {
-        return (Class<E>) ReflectionUtils
-                .findMaterializedGenericType(getClass(), STATIC_THIS, Throwable.class)
-                .orElseThrow(() -> new IllegalStateException("Failed to infer exception type"));
-    }
+    Class<E> getExceptionClass();
 
     /**
-     * Retrieves bean out of {@link ApplicationContextHolder}.
-     *
-     * @return bean
-     * @throws NoSuchBeanDefinitionException {@link EntityManager} bean not found
-     */
-    default EntityManager getEntityManagerBean() {
-        return ApplicationContextHolder
-                .getApplicationContext()
-                .getBean(EntityManager.class);
-    }
-
-    /**
-     * Creates an entity graph for {@link #getEntityClass()}.
+     * Creates an entity graph for {@link #getEntityClass()}. Implemented in {@link EnhancedJpaRepositoryImpl}.
      *
      * @return entity graph
-     * @see #findByIdWithFetchGraph(Object, EntityGraph)
+     * @see #findByIdWithFetchGraph(Serializable, EntityGraph) (Object, EntityGraph)
      */
-    default EntityGraph<T> createEntityGraph() {
-        return getEntityManagerBean().createEntityGraph(getEntityClass());
-    }
+    EntityGraph<T> createEntityGraph();
 
     /**
-     * Finds an entity by its ID using the specified entity graph for fetch optimization.
+     * Finds an entity by its ID using the specified entity graph for fetch optimization. Implemented in
+     * {@link EnhancedJpaRepositoryImpl}.
      * <p>
      * This method allows for fine-grained control over which entity attributes and associations are eagerly loaded by
      * providing a custom {@link EntityGraph}. The entity graph is used as a FETCH hint to optimize the query
@@ -120,120 +100,48 @@ public interface EnhancedJpaRepository<T extends Persistable<ID>, ID, E extends 
      * @param graph entity graph defining which attributes and associations to fetch eagerly; must not be {@code null}
      * @return optional entity
      */
-    @Transactional(readOnly = true)
-    default Optional<T> findByIdWithFetchGraph(ID id, EntityGraph<T> graph) {
-        Map<String, Object> hints = Map.of(EntityGraphType.FETCH.getKey(), graph);
-
-        return Optional.ofNullable(getEntityManagerBean()
-                .find(getEntityClass(), id, hints));
-    }
+    Optional<T> findByIdWithFetchGraph(ID id, EntityGraph<T> graph);
 
     /**
-     * Does the same as {@link #findById(Object)} but throws an exception if entity is not found.
+     * Does the same as {@link #findById(Object)} but throws an exception if entity is not found. Implemented in
+     * {@link EnhancedJpaRepositoryImpl}.
      *
      * @param id entity ID
      * @return entity
      * @throws E                          entity not found
      * @throws BeanInstantiationException {@code E}'s argument-less constructor failed
      */
-    @Transactional(readOnly = true)
-    default T getByIdOrThrow(ID id) {
-        return findById(id).orElseThrow(() ->
-                ReflectionUtils.instantiateEvenWithoutDefaultConstructor(getExceptionClass()));
-    }
+    T getByIdOrThrow(ID id);
 
     /**
      * Unlike {@link #findAllById(Iterable)}, returns elements in the same order as their IDs are returned by the input
-     * collection (which may or may not be ordered).
+     * collection (which may or may not be ordered). Implemented in {@link EnhancedJpaRepositoryImpl}.
      *
      * @param ids IDs
      * @return elements in the same order as in {@code ids}, mutable list - crucial for Hibernate if this list is
      *         assigned to another entity; if it's immutable, Hibernate can't save it because it tries to clear it
      */
-    @Transactional(readOnly = true)
-    default List<T> findAllByIdPreserveOrder(Collection<ID> ids) {
-        if (CollectionUtils.isEmpty(ids)) {
-            return new ArrayList<>();
-        }
-
-        Map<ID, T> foundEntities = findAllById(ids).stream()
-                .collect(Collectors.toMap(Persistable::getId, entity -> entity));
-
-        return ids.stream()
-                .map(foundEntities::get)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toCollection(ArrayList::new));
-    }
-
-    /**
-     * A more readable shortcut to {@link #findAllBy()}.
-     * <p>
-     * WARNING: {@code try-with-resources} is required.
-     *
-     * @return stream of entities
-     */
-    @Transactional(readOnly = true)
-    default Stream<T> findAllAsStream() {
-        return findAllBy();
-    }
-
-    /**
-     * Fetch all documents using DB cursor. Faster than {@link Pageable}, requires less memory than {@link #findAll()}.
-     * Requires {@code try-with-resources}:
-     * <pre>
-     *  try (var stream = repository.findAllAsStream()) {
-     *      [...]
-     *  }
-     * </pre>
-     * WARNING: call {@link EntityManager#detach(Object)} after processing each record (or a batch of records) to avoid
-     * OOM while retrieving big data (Hibernate keeps references to all the entities fetched).
-     *
-     * @return stream of entities
-     */
-    @Transactional(readOnly = true)
-    Stream<T> findAllBy();
+    List<T> findAllByIdPreserveOrder(Collection<ID> ids);
 
     /**
      * Saves a collection of entities in batches of {@link JpaConstants#INTERNAL_PAGE_SIZE}, flushing and clearing the
      * persistence context after each batch. This is more memory-efficient for bulk operations than
-     * {@link #saveAll(Iterable)}.
+     * {@link #saveAll(Iterable)}. Implemented in {@link EnhancedJpaRepositoryImpl}.
      *
      * @param entities entities to save, must not be {@code null}
      * @return saved entities
      */
-    @Transactional
-    default List<T> saveAllAndFlushInBatches(Collection<T> entities) {
-        return saveAllAndFlushInBatches(entities, JpaConstants.INTERNAL_PAGE_SIZE);
-    }
+    List<T> saveAllAndFlushInBatches(Collection<T> entities);
 
     /**
      * Saves a collection of entities in batches, flushing and clearing the persistence context after each batch. This
-     * is more memory-efficient for bulk operations than {@link #saveAll(Iterable)}.
+     * is more memory-efficient for bulk operations than {@link #saveAll(Iterable)}. Implemented in
+     * {@link EnhancedJpaRepositoryImpl}.
      *
      * @param entities  entities to save, must not be {@code null}
      * @param batchSize size of each batch
      * @return saved entities
      */
-    @Transactional
-    default List<T> saveAllAndFlushInBatches(Collection<T> entities, int batchSize) {
-        if (CollectionUtils.isEmpty(entities)) {
-            return new ArrayList<>();
-        }
-
-        List<T> savedEntities = new ArrayList<>(entities.size());
-        int i = 0;
-
-        for (T entity : entities) {
-            savedEntities.add(save(entity));
-            i++;
-
-            if (i % batchSize == 0) {
-                flush();
-                getEntityManagerBean().clear();
-            }
-        }
-
-        return savedEntities;
-    }
+    List<T> saveAllAndFlushInBatches(Collection<T> entities, int batchSize);
 
 }

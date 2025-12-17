@@ -1,4 +1,4 @@
-package guru.nicks.commons.jpa.repository;
+package guru.nicks.commons.jpa.domain;
 
 import com.querydsl.core.types.dsl.BooleanTemplate;
 import com.querydsl.core.types.dsl.StringTemplate;
@@ -9,7 +9,7 @@ import java.util.Collection;
 /**
  * Abstraction of DB-specific queries.
  */
-public enum EnhancedJpaDialect {
+public enum EnhancedSqlDialect {
 
     POSTGRES {
         @Override

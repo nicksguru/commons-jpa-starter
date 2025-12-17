@@ -3,6 +3,8 @@ package guru.nicks.commons.jpa.config;
 import guru.nicks.commons.jpa.GeometryFactoryQualifier;
 import guru.nicks.commons.jpa.domain.GeometryFactoryType;
 import guru.nicks.commons.jpa.domain.MyJpaProperties;
+import guru.nicks.commons.jpa.repository.EnhancedJpaRepository;
+import guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepository;
 
 import jakarta.persistence.EntityManagerFactory;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +28,16 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
 
+/**
+ * To inherit your JPA repositories from {@link EnhancedJpaRepository} or {@link EnhancedJpaSearchRepository}, add the
+ * following to your application configuration:
+ * <pre>
+ * &#64;EnableJpaRepositories(
+ *     basePackages = "com.yourcompany",
+ *     repositoryFactoryBeanClass = EnhancedJpaRepositoryFactoryBean.class
+ * )
+ * </pre>
+ */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(MyJpaProperties.class)
 @EnableTransactionManagement

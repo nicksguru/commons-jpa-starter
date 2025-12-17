@@ -48,17 +48,12 @@ Feature: JpaCrudService
   Scenario: Get entity by non-existent ID
     Given no entity with ID "999" exists
     When an entity is retrieved by ID "999"
-    Then TestException should be thrown
+    Then TestNotFoundException should be thrown
 
   Scenario: Find all entities by IDs preserving order
     Given entities with IDs "3,1,2" exist
     When entities are found by IDs "3,1,2"
     Then entities should be found in the order "3,1,2"
-
-  Scenario: Find all entities as stream
-    Given multiple entities exist
-    When all entities are found as stream
-    Then all entities should be returned as stream
 
   Scenario: Find all entities with pagination
     Given multiple entities exist

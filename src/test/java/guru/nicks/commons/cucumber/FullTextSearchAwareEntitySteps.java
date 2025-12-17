@@ -2,7 +2,6 @@ package guru.nicks.commons.cucumber;
 
 import guru.nicks.commons.cucumber.domain.TestEntity;
 import guru.nicks.commons.jpa.domain.FullTextSearchAwareEntity;
-import guru.nicks.commons.jpa.repository.EnhancedJpaRepository;
 import guru.nicks.commons.utils.text.NgramUtils;
 
 import io.cucumber.datatable.DataTable;
@@ -61,8 +60,7 @@ public class FullTextSearchAwareEntitySteps {
             pageable = PageRequest.of(pageNumber, pageSize);
         }
 
-        resultPageable = FullTextSearchAwareEntity.initSortCriteria(searchFilter, searchFilter::getSearchText,
-                pageable);
+        resultPageable = FullTextSearchAwareEntity.initSortCriteria(searchFilter::getSearchText, pageable);
     }
 
     @Then("the pageable should have page {int} and size {int}")
@@ -174,7 +172,7 @@ public class FullTextSearchAwareEntitySteps {
         String fullTextData = entity.getFullTextSearchData();
 
         if (fullTextData != null) {
-            int maxLength = EnhancedJpaRepository.getDialect().getMaxFullTextSearchDataLength();
+            int maxLength = entity.getMaxFullTextSearchDataLength();
 
             assertThat(fullTextData.length())
                     .as("Full-text search data length should not exceed " + maxLength)

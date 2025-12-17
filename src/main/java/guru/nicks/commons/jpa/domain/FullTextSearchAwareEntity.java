@@ -1,14 +1,11 @@
 package guru.nicks.commons.jpa.domain;
 
-import guru.nicks.commons.jpa.repository.EnhancedJpaDialect;
-import guru.nicks.commons.jpa.repository.EnhancedJpaRepository;
 import guru.nicks.commons.utils.crypto.ChecksumUtils;
 import guru.nicks.commons.utils.text.NgramUtils;
 import guru.nicks.commons.utils.text.NgramUtilsConfig;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.annotation.Nonnull;
-import jakarta.annotation.Nullable;
 import jakarta.persistence.Basic;
 import jakarta.persistence.MappedSuperclass;
 import jakarta.persistence.PrePersist;
@@ -54,7 +51,7 @@ import static guru.nicks.commons.validation.dsl.ValiDsl.checkNotNull;
  *   <li>search data checksum helps avoid overwriting costly n-gram recalculation for unchanged content</li>
  *   <li>n-grams are generated from entity text fields to support partial and fuzzy matching</li>
  *   <li>search data is automatically updated on entity insert/update</li>
- *   <li>maximum length of search data is limited by {@link EnhancedJpaDialect#getMaxFullTextSearchDataLength()}</li>
+ *   <li>maximum length of search data is limited by {@link EnhancedSqlDialect#getMaxFullTextSearchDataLength()}</li>
  * </ul>
  *
  * @param <ID> entity ID type
@@ -75,7 +72,7 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
     /**
      * Non-existing property name which indicates the intention to sort by the search rank (desc).
      *
-     * @see #initSortCriteria(Object, Supplier, Pageable)
+     * @see #initSortCriteria(Supplier, Pageable)
      */
     public static final String SEARCH_RANK_PSEUDOFIELD = "_searchRank";
 
@@ -83,12 +80,6 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
      * Property name for subclasses to declare for holding full-text search data.
      */
     public static final String FULL_TEXT_SEARCH_DATA_PROPERTY = "fullTextSearchData";
-
-    /**
-     * Cache for better performance.
-     */
-    private static final int MAX_FULL_TEXT_SEARCH_DATA_LENGTH =
-            EnhancedJpaRepository.getDialect().getMaxFullTextSearchDataLength();
 
     /**
      * Initial {@link StringBuilder} capacity for accumulating n-grams.
@@ -116,14 +107,11 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
      * <p>
      * The above means that if caller specified sort by search rank (asc), this method overrides it with 'desc'.
      *
-     * @param filter                 search filter (nullable)
      * @param fullTextSearchSupplier supplies full-text search string, if any; may return {@code null}
      * @param pageable               pagination request
-     * @param <F>                    search filter type
      * @return old pagination request if sort criteria were already there, new request otherwise
      */
-    public static <F> Pageable initSortCriteria(@Nullable F filter, Supplier<String> fullTextSearchSupplier,
-            Pageable pageable) {
+    public static Pageable initSortCriteria(Supplier<String> fullTextSearchSupplier, Pageable pageable) {
         checkNotNull(fullTextSearchSupplier, "fullTextSearchGetter");
         checkNotNull(pageable, "pageable");
 
@@ -161,6 +149,14 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
     public abstract void setFullTextSearchData(String value);
 
     /**
+     * @return the maximum length of the full-text search data field, presumably borrowed from
+     *         {@link EnhancedSqlDialect#getMaxFullTextSearchDataLength()}
+     */
+    @JsonIgnore
+    @Transient
+    public abstract int getMaxFullTextSearchDataLength();
+
+    /**
      * Returns the configuration for n-gram generation used in full-text search.
      * <p>
      * This configuration determines how text is tokenized and converted into n-grams for search indexing. Subclasses
@@ -169,7 +165,9 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
      *
      * @return the n-gram configuration to use for generating search data
      */
+    @JsonIgnore
     @Transient
+    @Nonnull
     public abstract NgramUtilsConfig getNgramUtilsConfig();
 
     /**
@@ -182,6 +180,7 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
      * @return search data suppliers, such as property getters; {@code null} suppliers and blank values are ignored
      */
     @JsonIgnore
+    @Transient
     @Nonnull
     protected abstract Collection<Supplier<String>> getFullTextSearchDataSuppliers();
 
@@ -215,7 +214,7 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
         ngrams.stream()
                 .takeWhile(ngram -> {
                     int separatorLength = builder.isEmpty() ? 0 : 1;
-                    return builder.length() + separatorLength + ngram.length() <= MAX_FULL_TEXT_SEARCH_DATA_LENGTH;
+                    return builder.length() + separatorLength + ngram.length() <= getMaxFullTextSearchDataLength();
                 }).forEach(ngram -> {
                     if (!builder.isEmpty()) {
                         builder.append(" ");

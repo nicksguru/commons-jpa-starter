@@ -25,7 +25,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -56,8 +55,6 @@ public class JpaCrudServiceSteps {
     private Optional<TestEntity> foundEntity;
     private TestEntity retrievedEntity;
     private List<TestEntity> foundEntities;
-
-    private Stream<TestEntity> entityStream;
     private Page<TestEntity> entityPage;
 
     @Before
@@ -93,6 +90,8 @@ public class JpaCrudServiceSteps {
 
         when(repository.existsById(id))
                 .thenReturn(true);
+        when(repository.getByIdOrThrow(id))
+                .thenReturn(jpaWorld.getEntity());
         when(repository.findById(id))
                 .thenReturn(Optional.of(jpaWorld.getEntity()));
     }
@@ -101,6 +100,8 @@ public class JpaCrudServiceSteps {
     public void noEntityWithIdExists(String id) {
         when(repository.existsById(id))
                 .thenReturn(false);
+        when(repository.getByIdOrThrow(id))
+                .thenThrow(new TestNotFoundException());
         when(repository.findById(id))
                 .thenReturn(Optional.empty());
     }
@@ -132,8 +133,6 @@ public class JpaCrudServiceSteps {
                 TestEntity.builder().id("3").name("Entity 3").build()
         );
 
-        when(repository.findAllAsStream())
-                .thenReturn(entities.stream());
         when(repository.findAll(any(Pageable.class)))
                 .thenReturn(new PageImpl<>(entities));
     }
@@ -204,11 +203,6 @@ public class JpaCrudServiceSteps {
     public void entitiesAreFoundByIds(String idsString) {
         List<String> ids = Arrays.asList(idsString.split(","));
         foundEntities = service.findAllByIdPreserveOrder(ids);
-    }
-
-    @When("all entities are found as stream")
-    public void allEntitiesAreFoundAsStream() {
-        entityStream = service.findAllAsStream();
     }
 
     @When("all entities are found with page {int} and size {int}")
@@ -287,18 +281,6 @@ public class JpaCrudServiceSteps {
         }
     }
 
-    @Then("all entities should be returned as stream")
-    public void allEntitiesShouldBeReturnedAsStream() {
-        assertThat(entityStream)
-                .as("entityStream")
-                .isNotNull();
-
-        List<TestEntity> streamedEntities = entityStream.toList();
-        assertThat(streamedEntities)
-                .as("streamedEntities")
-                .hasSize(entities.size());
-    }
-
     @Then("a page of entities should be returned")
     public void aPageOfEntitiesShouldBeReturned() {
         assertThat(entityPage)
@@ -310,16 +292,16 @@ public class JpaCrudServiceSteps {
                 .hasSize(entities.size());
     }
 
-    @Then("TestException should be thrown")
-    public void testEntityExceptionShouldBeThrown() {
-        assertThat(textWorld.getLastException()).isInstanceOf(TestException.class);
+    @Then("TestNotFoundException should be thrown")
+    public void testNotFoundExceptionShouldBeThrown() {
+        assertThat(textWorld.getLastException()).isInstanceOf(TestNotFoundException.class);
     }
 
-    public interface TestRepository extends EnhancedJpaRepository<TestEntity, String, TestException> {
+    public interface TestRepository extends EnhancedJpaRepository<TestEntity, String, TestNotFoundException> {
     }
 
     @StandardException
-    public static class TestException extends BusinessException {
+    public static class TestNotFoundException extends BusinessException {
     }
 
 }
