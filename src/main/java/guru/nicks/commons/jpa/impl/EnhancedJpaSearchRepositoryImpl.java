@@ -44,14 +44,13 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 /**
- * Base implementation for {@link EnhancedJpaSearchRepository} that provides dependency injection support for
- * search-related functionality. This class extends {@link EnhancedJpaRepositoryImpl} and adds {@link ObjectMapper}
- * injection for JSON operations.
+ * Base implementation for {@link EnhancedJpaSearchRepository}y. This class extends {@link EnhancedJpaRepositoryImpl}
+ * and provides search-related functionality described in {@link EnhancedJpaSearchRepository}.
  *
  * @param <T>  entity type
  * @param <ID> primary key type
  * @param <E>  exception type to throw when entity is not found
- * @param <F>  filter type
+ * @param <F>  search filter type
  */
 @Transactional(readOnly = true) // borrowed from SimpleJpaRepository
 @SuppressWarnings("java:S119")  // allow type names like 'ID'
@@ -80,8 +79,7 @@ public class EnhancedJpaSearchRepositoryImpl<T extends Persistable<ID>,
      *
      * @param entityInformation           must not be {@code null}
      * @param entityManager               must not be {@code null}
-     * @param originalRepositoryInterface declared in the original repository with {@code extends} - must be *
-     *                                    {@link EnhancedJpaSearchRepository} or its subclass
+     * @param originalRepositoryInterface declared in the original repository via (after) {@code extends}
      * @param applicationContext          must not be {@code null}
      * @param objectMapper                must not be {@code null}
      * @throws IllegalArgumentException if {@code originalRepositoryInterface} is not a subclass of
@@ -103,7 +101,8 @@ public class EnhancedJpaSearchRepositoryImpl<T extends Persistable<ID>,
     }
 
     /**
-     * Delegates to the original repository where this method must be implemented.
+     * Delegates to the original repository where this method must be implemented. If there's no implementation, Spring
+     * Data calls this method again, which results in an eternal loop and a {@link StackOverflowError}.
      */
     @Override
     public BooleanBuilder convertToSearchBuilder(F filter) {
@@ -111,7 +110,8 @@ public class EnhancedJpaSearchRepositoryImpl<T extends Persistable<ID>,
     }
 
     /**
-     * Delegates to the original repository where this method must be implemented.
+     * Delegates to the original repository where this method must be implemented. If there's no implementation, Spring
+     * Data calls this method again, which results in an eternal loop and a {@link StackOverflowError}.
      */
     @Override
     public Page<T> findByFilter(F filter, Pageable pageable) {

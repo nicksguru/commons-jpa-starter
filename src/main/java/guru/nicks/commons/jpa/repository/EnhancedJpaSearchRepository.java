@@ -30,7 +30,7 @@ import java.util.function.Supplier;
  * @param <T>  entity type (if full-text search is required, must inherit from {@link FullTextSearchAwareEntity})
  * @param <ID> primary key type
  * @param <E>  exception type to throw when entity is not found
- * @param <F>  filter type (pass {@code Void} for no filter)
+ * @param <F>  search filter type (pass {@code Void} for no filter)
  */
 @NoRepositoryBean
 @SuppressWarnings("java:S119")  // allow type names like 'ID'

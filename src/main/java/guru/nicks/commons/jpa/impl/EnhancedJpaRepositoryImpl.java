@@ -27,9 +27,8 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
- * Base implementation for {@link EnhancedJpaRepository} that provides dependency injection support. This class extends
- * {@link SimpleJpaRepository} and adds custom functionality while allowing proper Spring bean injection without the
- * need for a static context holder.
+ * Base implementation for {@link EnhancedJpaRepository}. This class extends {@link SimpleJpaRepository} and provides
+ * custom functionality described in {@link EnhancedJpaRepository}.
  *
  * @param <T>  entity type
  * @param <ID> primary key type
@@ -59,8 +58,7 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
      *
      * @param entityInformation           must not be {@code null}
      * @param entityManager               must not be {@code null}
-     * @param originalRepositoryInterface declared in the original repository via {@code extends} - must be
-     *                                    {@link EnhancedJpaRepository} or its subclass
+     * @param originalRepositoryInterface declared in the original repository via (after) {@code extends}
      * @param applicationContext          must not be {@code null}
      * @throws IllegalArgumentException if {@code originalRepositoryInterface} is not a subclass of
      *                                  {@link EnhancedJpaRepository}
@@ -145,7 +143,8 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
                 .collect(Collectors.toMap(Persistable::getId, entity -> entity,
                         // merge duplicate keys
                         (existing, replacement) -> existing,
-                        () -> new HashMap<>(ids.size())
+                        // not 'new HashMap<>(ids.size())' - that would cause resizing because to the load factor
+                        () -> HashMap.newHashMap(ids.size())
                 ));
 
         // pre-allocate result list with exact size needed
