@@ -9,8 +9,6 @@ import guru.nicks.commons.utils.text.NgramUtilsConfig;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.EntityPath;
 import com.querydsl.core.types.Order;
@@ -38,14 +36,22 @@ import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.Serializable;
+import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+
+import static guru.nicks.commons.validation.dsl.ValiDsl.checkNotNull;
 
 /**
- * Base implementation for {@link EnhancedJpaSearchRepository}y. This class extends {@link EnhancedJpaRepositoryImpl}
- * and provides search-related functionality described in {@link EnhancedJpaSearchRepository}.
+ * Base implementation for {@link EnhancedJpaSearchRepository}. This class extends {@link EnhancedJpaRepositoryImpl} and
+ * provides search-related functionality described in {@link EnhancedJpaSearchRepository}.
  *
  * @param <T>  entity type
  * @param <ID> primary key type
@@ -62,16 +68,14 @@ public class EnhancedJpaSearchRepositoryImpl<T extends Persistable<ID>,
         extends EnhancedJpaRepositoryImpl<T, ID, E>
         implements EnhancedJpaSearchRepository<T, ID, E, F> {
 
+    private final ObjectMapper objectMapper;
+
     /**
-     * Stores {@link FullTextSearchAwareEntity#getNgramUtilsConfig()} for {@code T}.
+     * Keeps {@link FullTextSearchAwareEntity#getNgramUtilsConfig()} for {@code T}.
      * <p>
      * WARNING: this approach assumes that the config is the same for all instances of the given class.
      */
-    private final Cache<Class<?>, NgramUtilsConfig> ngramUtilsConfigCache = Caffeine.newBuilder()
-            .maximumSize(1)
-            .build();
-
-    private final ObjectMapper objectMapper;
+    private final AtomicReference<NgramUtilsConfig> ngramUtilsConfigRef = new AtomicReference<>();
 
     /**
      * Creates a new {@link EnhancedJpaSearchRepositoryImpl} for the given {@link JpaEntityInformation} and
@@ -83,7 +87,8 @@ public class EnhancedJpaSearchRepositoryImpl<T extends Persistable<ID>,
      * @param applicationContext          must not be {@code null}
      * @param objectMapper                must not be {@code null}
      * @throws IllegalArgumentException if {@code originalRepositoryInterface} is not a subclass of
-     *                                  {@link EnhancedJpaSearchRepository}
+     *                                  {@link EnhancedJpaSearchRepository} or does not implement all required methods
+     *                                  (as per {@link EnhancedJpaSearchRepository#METHODS_TO_IMPLEMENT})
      */
     public EnhancedJpaSearchRepositoryImpl(JpaEntityInformation<T, ID> entityInformation, EntityManager entityManager,
             Class<? extends EnhancedJpaRepository<T, ID, E>> originalRepositoryInterface,
@@ -92,8 +97,24 @@ public class EnhancedJpaSearchRepositoryImpl<T extends Persistable<ID>,
         super(entityInformation, entityManager, originalRepositoryInterface, applicationContext);
 
         if (!EnhancedJpaSearchRepository.class.isAssignableFrom(originalRepositoryInterface)) {
-            throw new IllegalArgumentException("Original repository interface must be a subclass of "
-                    + EnhancedJpaSearchRepository.class.getName());
+            throw new IllegalArgumentException("Interface [" + originalRepositoryInterface.getName()
+                    + "] must be a subclass of [" + EnhancedJpaSearchRepository.class.getName() + "]");
+        }
+
+        Set<String> defaultMethods = Arrays.stream(originalRepositoryInterface.getDeclaredMethods())
+                .filter(Method::isDefault)
+                .map(Method::getName)
+                .collect(Collectors.toSet());
+        // sort methods for better readability
+        Collection<String> missingMethods = new TreeSet<>(METHODS_TO_IMPLEMENT);
+        missingMethods.removeAll(defaultMethods);
+
+        // check if all required methods are implemented in the interface i.e. are 'default' ones
+        if (!missingMethods.isEmpty()) {
+            throw new IllegalArgumentException("Interface [" + originalRepositoryInterface.getName()
+                    + "] is missing the following 'default' methods declared in ["
+                    + EnhancedJpaSearchRepository.class.getName() + "]: "
+                    + missingMethods);
         }
 
         this.objectMapper = objectMapper;
@@ -102,7 +123,7 @@ public class EnhancedJpaSearchRepositoryImpl<T extends Persistable<ID>,
 
     /**
      * Delegates to the original repository where this method must be implemented. If there's no implementation, Spring
-     * Data calls this method again, which results in an eternal loop and a {@link StackOverflowError}.
+     * Data calls this method again and again, which results in an eternal loop and a {@link StackOverflowError}.
      */
     @Override
     public BooleanBuilder convertToSearchBuilder(F filter) {
@@ -111,7 +132,7 @@ public class EnhancedJpaSearchRepositoryImpl<T extends Persistable<ID>,
 
     /**
      * Delegates to the original repository where this method must be implemented. If there's no implementation, Spring
-     * Data calls this method again, which results in an eternal loop and a {@link StackOverflowError}.
+     * Data calls this method again and again, which results in an eternal loop and a {@link StackOverflowError}.
      */
     @Override
     public Page<T> findByFilter(F filter, Pageable pageable) {
@@ -293,21 +314,29 @@ public class EnhancedJpaSearchRepositoryImpl<T extends Persistable<ID>,
     }
 
     /**
-     * Retrieves ngram configuration for {@link #getEntityClass()}. The configuration is cached to avoid repeated entity
-     * instantiation. If not found in cache, instantiates the entity class (even without a default constructor) and
-     * retrieves its {@link FullTextSearchAwareEntity#getNgramUtilsConfig()}.
+     * Retrieves ngram configuration for {@link #getEntityClass()} if {@link #ngramUtilsConfigRef} holds {@code null}.
+     * In the latter case, {@link #getEntityClass()} may be instantiated more than once, as a side effect (but
+     * {@code #ngramUtilsConfigRef} is still updated atomically).
      * <p>
      * NOTE: this approach assumes that the <b>ngram configuration is the same for all instances of the class</b>.
      *
      * @return the ngram configuration for the entity class
      */
     private NgramUtilsConfig getNgramUtilsConfig() {
-        // 'get' method may return null as per Caffeine specs, but never does in this particular case
-        return ngramUtilsConfigCache.get(getEntityClass(), clazz -> {
-            var tmpEntity = (FullTextSearchAwareEntity<?>)
-                    ReflectionUtils.instantiateEvenWithoutDefaultConstructor(clazz);
-            return tmpEntity.getNgramUtilsConfig();
-        });
+        NgramUtilsConfig config = ngramUtilsConfigRef.get();
+        // already initialized
+        if (config != null) {
+            return config;
+        }
+
+        var tmpEntity = (FullTextSearchAwareEntity<?>)
+                ReflectionUtils.instantiateEvenWithoutDefaultConstructor(getEntityClass());
+        config = checkNotNull(tmpEntity.getNgramUtilsConfig(), getEntityClass().getName() + ".getNgramUtilsConfig()");
+
+        // atomically set if still null
+        ngramUtilsConfigRef.compareAndSet(null, config);
+        // never null
+        return ngramUtilsConfigRef.get();
     }
 
 }

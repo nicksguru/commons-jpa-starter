@@ -15,13 +15,14 @@ import org.springframework.data.repository.NoRepositoryBean;
 
 import java.io.Serializable;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
  * Search-related enhancements for JPA repositories. Used implicitly via {@link EnhancedJpaRepositoryFactoryBean}.
- * Repositories must implement the following methods (failure to do so will result in a {@link StackOverflowError} when
- * they are called):
+ * Repositories must implement the following methods (failure to do so will result in an exception during
+ * initialization):
  * <ul>
  *     <li>{@link #convertToSearchBuilder(Object)}</li>
  *     <li>{@link #findByFilter(Object, Pageable)}</li>
@@ -39,6 +40,8 @@ public interface EnhancedJpaSearchRepository<T extends Persistable<ID>,
         E extends RuntimeException,
         F>
         extends EnhancedJpaRepository<T, ID, E> {
+
+    Set<String> METHODS_TO_IMPLEMENT = Set.of("convertToSearchBuilder", "findByFilter");
 
     /**
      * Converts search filter request to QueryDSL predicate builder. <b>Repositories must implement this method.</b>
