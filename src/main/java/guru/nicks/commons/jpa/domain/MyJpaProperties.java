@@ -17,7 +17,7 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 // immutability
 @Value
-@NonFinal // needed for CGLIB to bind property values (nested classes don't need this)
+@NonFinal // CGLIB creates a subclass to bind property values (nested classes don't need this)
 @Jacksonized
 @Builder(toBuilder = true)
 public class MyJpaProperties {
