@@ -23,10 +23,7 @@ public class JtsGeoMapper {
             return null;
         }
 
-        return GeoPointDto.builder()
-                .lat(source.getY())
-                .lon(source.getX())
-                .build();
+        return new GeoPointDto(source.getY(), source.getX());
     }
 
     public Point fromGeoDto(GeoPointDto dto) {
@@ -34,7 +31,7 @@ public class JtsGeoMapper {
             return null;
         }
 
-        return geoFactory.createPoint(new Coordinate(dto.getLon(), dto.getLat()));
+        return geoFactory.createPoint(new Coordinate(dto.lon(), dto.lat()));
     }
 
 }

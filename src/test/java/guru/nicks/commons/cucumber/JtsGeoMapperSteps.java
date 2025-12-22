@@ -65,20 +65,17 @@ public class JtsGeoMapperSteps {
         assertThat(resultDto)
                 .as("result dto")
                 .isNotNull();
-        assertThat(resultDto.getLon())
+        assertThat(resultDto.lon())
                 .as("longitude")
                 .isEqualTo(lon);
-        assertThat(resultDto.getLat())
+        assertThat(resultDto.lat())
                 .as("latitude")
                 .isEqualTo(lat);
     }
 
     @Given("a GeoPointDto with longitude {double} and latitude {double}")
     public void aGeoPointDtoWithLongitudeAndLatitude(double lon, double lat) {
-        geoPointDto = GeoPointDto.builder()
-                .lon(lon)
-                .lat(lat)
-                .build();
+        geoPointDto = new GeoPointDto(lat, lon);
     }
 
     @Given("a null GeoPointDto")
@@ -90,7 +87,7 @@ public class JtsGeoMapperSteps {
     public void theGeoPointDtoIsConvertedToPoint() {
         // Mock the GeometryFactory to return a Point when createPoint is called
         if (geoPointDto != null) {
-            var expectedPoint = createPoint(geoPointDto.getLon(), geoPointDto.getLat());
+            var expectedPoint = createPoint(geoPointDto.lon(), geoPointDto.lat());
 
             when(geoFactory.createPoint(any(Coordinate.class)))
                     .thenReturn(expectedPoint);

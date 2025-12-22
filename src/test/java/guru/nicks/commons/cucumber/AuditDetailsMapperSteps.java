@@ -113,7 +113,7 @@ public class AuditDetailsMapperSteps {
         assertThat(auditDetailsDto)
                 .as("audit details dto")
                 .isNotNull();
-        assertThat(auditDetailsDto.getCreatedBy())
+        assertThat(auditDetailsDto.createdBy())
                 .as("created by")
                 .isNull();
     }
@@ -123,7 +123,7 @@ public class AuditDetailsMapperSteps {
         assertThat(auditDetailsDto)
                 .as("audit details dto")
                 .isNotNull();
-        assertThat(auditDetailsDto.getLastModifiedBy())
+        assertThat(auditDetailsDto.lastModifiedBy())
                 .as("last modified by")
                 .isNull();
     }
@@ -135,32 +135,32 @@ public class AuditDetailsMapperSteps {
                 .isNotNull();
 
         if ("null".equals(userId) && "null".equals(traceId)) {
-            assertThat(auditDetailsDto.getCreatedBy())
+            assertThat(auditDetailsDto.createdBy())
                     .as("created by")
                     .isNull();
             return;
         }
 
-        assertThat(auditDetailsDto.getCreatedBy())
+        assertThat(auditDetailsDto.createdBy())
                 .as("created by")
                 .isNotNull();
 
         if (!"null".equals(userId)) {
-            assertThat(auditDetailsDto.getCreatedBy().getUserId())
+            assertThat(auditDetailsDto.createdBy().userId())
                     .as("created by user id")
                     .isEqualTo(userId);
         } else {
-            assertThat(auditDetailsDto.getCreatedBy().getUserId())
+            assertThat(auditDetailsDto.createdBy().userId())
                     .as("created by user id")
                     .isNull();
         }
 
         if (!"null".equals(traceId)) {
-            assertThat(auditDetailsDto.getCreatedBy().getTraceId())
+            assertThat(auditDetailsDto.createdBy().traceId())
                     .as("created by trace id")
                     .isEqualTo(traceId);
         } else {
-            assertThat(auditDetailsDto.getCreatedBy().getTraceId())
+            assertThat(auditDetailsDto.createdBy().traceId())
                     .as("created by trace id")
                     .isNull();
         }
@@ -172,26 +172,26 @@ public class AuditDetailsMapperSteps {
                 .as("audit details dto")
                 .isNotNull();
 
-        assertThat(auditDetailsDto.getLastModifiedBy())
+        assertThat(auditDetailsDto.lastModifiedBy())
                 .as("last modified by")
                 .isNotNull();
 
         if (!"null".equals(userId)) {
-            assertThat(auditDetailsDto.getLastModifiedBy().getUserId())
+            assertThat(auditDetailsDto.lastModifiedBy().userId())
                     .as("last modified by user id")
                     .isEqualTo(userId);
         } else {
-            assertThat(auditDetailsDto.getLastModifiedBy().getUserId())
+            assertThat(auditDetailsDto.lastModifiedBy().userId())
                     .as("last modified by user id")
                     .isNull();
         }
 
         if (!"null".equals(traceId)) {
-            assertThat(auditDetailsDto.getLastModifiedBy().getTraceId())
+            assertThat(auditDetailsDto.lastModifiedBy().traceId())
                     .as("last modified by trace id")
                     .isEqualTo(traceId);
         } else {
-            assertThat(auditDetailsDto.getLastModifiedBy().getTraceId())
+            assertThat(auditDetailsDto.lastModifiedBy().traceId())
                     .as("last modified by trace id")
                     .isNull();
         }
