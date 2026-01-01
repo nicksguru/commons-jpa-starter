@@ -14,7 +14,6 @@ import lombok.Setter;
 import lombok.ToString;
 import lombok.experimental.FieldNameConstants;
 import lombok.experimental.SuperBuilder;
-import lombok.extern.jackson.Jacksonized;
 
 import java.util.Collection;
 import java.util.List;
@@ -24,8 +23,6 @@ import java.util.function.Supplier;
 @Getter
 @Setter
 @FieldNameConstants
-//
-@Jacksonized
 @SuperBuilder
 // no @EqualsAndHashCode because entities are supposed to be distinguished by their ID
 @ToString(callSuper = true)
