@@ -111,7 +111,8 @@ public interface EnhancedJpaRepository<T extends Persistable<ID>,
      * @throws E                          entity not found
      * @throws BeanInstantiationException {@code E}'s argument-less constructor failed
      */
-    T getByIdOrThrow(ID id);
+    @Override
+    T getById(ID id);
 
     /**
      * Unlike {@link #findAllById(Iterable)}, returns elements in the same order as their IDs are returned by the input

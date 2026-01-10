@@ -90,7 +90,7 @@ public class JpaCrudServiceSteps {
 
         when(repository.existsById(id))
                 .thenReturn(true);
-        when(repository.getByIdOrThrow(id))
+        when(repository.getById(id))
                 .thenReturn(jpaWorld.getEntity());
         when(repository.findById(id))
                 .thenReturn(Optional.of(jpaWorld.getEntity()));
@@ -100,7 +100,7 @@ public class JpaCrudServiceSteps {
     public void noEntityWithIdExists(String id) {
         when(repository.existsById(id))
                 .thenReturn(false);
-        when(repository.getByIdOrThrow(id))
+        when(repository.getById(id))
                 .thenThrow(new TestNotFoundException());
         when(repository.findById(id))
                 .thenReturn(Optional.empty());
@@ -193,7 +193,7 @@ public class JpaCrudServiceSteps {
     @When("an entity is retrieved by ID {string}")
     public void anEntityIsRetrievedById(String id) {
         try {
-            retrievedEntity = service.getByIdOrThrow(id);
+            retrievedEntity = service.getById(id);
         } catch (Exception e) {
             textWorld.setLastException(e);
         }

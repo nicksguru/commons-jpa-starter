@@ -95,7 +95,7 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
                         + originalRepositoryInterface));
 
         this.originalRepositoryInterface = originalRepositoryInterface;
-        // Pre-instantiate exception to avoid expensive reflection on every getByIdOrThrow call
+        // pre-instantiate exception to avoid expensive reflection on every getById call
         this.cachedExceptionInstance = ReflectionUtils.instantiateEvenWithoutDefaultConstructor(exceptionClass);
 
         log.debug("Wrapped {}", originalRepositoryInterface.getName());
@@ -125,11 +125,6 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
     public Optional<T> findByIdWithFetchGraph(ID id, EntityGraph<T> graph) {
         Map<String, Object> hints = Map.of(EntityGraphType.FETCH.getKey(), graph);
         return Optional.ofNullable(entityManager.find(getEntityClass(), id, hints));
-    }
-
-    @Override
-    public T getByIdOrThrow(ID id) {
-        return findById(id).orElseThrow(() -> cachedExceptionInstance);
     }
 
     @Override
@@ -195,6 +190,11 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
         }
 
         return savedEntities;
+    }
+
+    @Override
+    public T getById(ID id) {
+        return findById(id).orElseThrow(() -> cachedExceptionInstance);
     }
 
     /**

@@ -59,8 +59,8 @@ public interface JpaCrudService<T extends Persistable<ID>, ID extends Serializab
     }
 
     @Override
-    default T getByIdOrThrow(ID id) {
-        return getRepository().getByIdOrThrow(id);
+    default T getById(ID id) {
+        return getRepository().getById(id);
     }
 
     @Override
