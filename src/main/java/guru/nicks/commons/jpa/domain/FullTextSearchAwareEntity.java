@@ -6,6 +6,7 @@ import guru.nicks.commons.utils.text.NgramUtilsConfig;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.annotation.Nonnull;
+import jakarta.annotation.Nullable;
 import jakarta.persistence.Basic;
 import jakarta.persistence.MappedSuperclass;
 import jakarta.persistence.PrePersist;
@@ -26,7 +27,6 @@ import org.springframework.data.domain.Sort;
 
 import java.util.Collection;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.function.Supplier;
 
 import static guru.nicks.commons.validation.dsl.ValiDsl.checkNotNull;
@@ -72,7 +72,7 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
     /**
      * Non-existing property name which indicates the intention to sort by the search rank (desc).
      *
-     * @see #initSortCriteria(Supplier, Pageable)
+     * @see #initSortCriteria(String, Pageable)
      */
     public static final String SEARCH_RANK_PSEUDOFIELD = "_searchRank";
 
@@ -107,12 +107,11 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
      * <p>
      * The above means that if caller specified sort by search rank (asc), this method overrides it with 'desc'.
      *
-     * @param fullTextSearchSupplier supplies full-text search string, if any; may return {@code null}
-     * @param pageable               pagination request
+     * @param fullTextSearch full-text search string, if any; can be {@code null}
+     * @param pageable       pagination request
      * @return old pagination request if sort criteria were already there, new request otherwise
      */
-    public static Pageable initSortCriteria(Supplier<String> fullTextSearchSupplier, Pageable pageable) {
-        checkNotNull(fullTextSearchSupplier, "fullTextSearchGetter");
+    public static Pageable initSortCriteria(@Nullable String fullTextSearch, Pageable pageable) {
         checkNotNull(pageable, "pageable");
 
         // caller intends to sort, but not by search rank
@@ -121,13 +120,12 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
         }
 
         // sort by search rank (desc, even if caller specified asc) or by date of creation (desc)
-        String sortField = Optional.ofNullable(fullTextSearchSupplier.get())
-                .filter(StringUtils::isNotBlank)
-                .map(f -> SEARCH_RANK_PSEUDOFIELD)
-                .orElse(AuditableEntity.Fields.createdDate);
-
+        String sortField = StringUtils.isNotBlank(fullTextSearch)
+                ? SEARCH_RANK_PSEUDOFIELD
+                : AuditableEntity.Fields.createdDate;
         Sort newSort = Sort.by(
                 Sort.Order.desc(sortField));
+
         return pageable.isUnpaged()
                 ? Pageable.unpaged(newSort)
                 : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), newSort);
