@@ -1,12 +1,12 @@
 package guru.nicks.commons.jpa.repository;
 
+import guru.nicks.commons.jpa.JpaInference;
 import guru.nicks.commons.jpa.domain.EnhancedSqlDialect;
 import guru.nicks.commons.jpa.domain.JpaConstants;
 import guru.nicks.commons.jpa.impl.EnhancedJpaRepositoryImpl;
 
 import jakarta.persistence.EntityGraph;
 import org.springframework.beans.BeanInstantiationException;
-import org.springframework.core.env.Environment;
 import org.springframework.data.domain.Persistable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.querydsl.QuerydslPredicateExecutor;
@@ -37,16 +37,6 @@ public interface EnhancedJpaRepository<T extends Persistable<ID>,
         extends JpaRepository<T, ID>, QuerydslPredicateExecutor<T> {
 
     /**
-     * @see #getSqlDialect()
-     */
-    String SQL_DIALECT_PROPERTY_NAME = "app.database.dialect";
-
-    /**
-     * @see #getSqlDialect()
-     */
-    EnhancedSqlDialect DEFAULT_SQL_DIALECT = EnhancedSqlDialect.POSTGRES;
-
-    /**
      * A predicate that validates if a given string is a valid SQL column name. It allows names starting with a letter
      * or underscore, followed by letters, digits, or underscores. This is useful for preventing SQL injection in
      * dynamically constructed query parts.
@@ -56,9 +46,8 @@ public interface EnhancedJpaRepository<T extends Persistable<ID>,
             .asMatchPredicate();
 
     /**
-     * Returns the SQL dialect configured for this repository. This method is implemented in
-     * {@link EnhancedJpaRepositoryImpl} which has access to the injected {@link Environment} and falls back on
-     * {@link #DEFAULT_SQL_DIALECT}.
+     * This method is implemented in {@link EnhancedJpaRepositoryImpl} which delegates to
+     * {@link JpaInference#getSqlDialect()}.
      *
      * @return SQL dialect
      */

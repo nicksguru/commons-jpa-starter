@@ -1,5 +1,6 @@
 package guru.nicks.commons.jpa.impl;
 
+import guru.nicks.commons.jpa.JpaInference;
 import guru.nicks.commons.jpa.domain.EnhancedSqlDialect;
 import guru.nicks.commons.jpa.domain.JpaConstants;
 import guru.nicks.commons.jpa.repository.EnhancedJpaRepository;
@@ -42,8 +43,8 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
         implements EnhancedJpaRepository<T, ID, E> {
 
     private final EntityManager entityManager;
-    private final EnhancedSqlDialect sqlDialect;
     private final ApplicationContext applicationContext;
+    private final JpaInference jpaInference;
 
     private final Class<? extends EnhancedJpaRepository<T, ID, E>> originalRepositoryInterface;
     private final Class<T> entityClass;
@@ -76,11 +77,7 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
 
         this.entityManager = entityManager;
         this.applicationContext = applicationContext;
-
-        sqlDialect = applicationContext
-                .getEnvironment()
-                .getProperty(SQL_DIALECT_PROPERTY_NAME, EnhancedSqlDialect.class, DEFAULT_SQL_DIALECT);
-        log.info("Using SQL dialect {}", sqlDialect);
+        jpaInference = applicationContext.getBean(JpaInference.class);
 
         entityClass = (Class<T>) ReflectionUtils
                 .findMaterializedGenericType(originalRepositoryInterface,
@@ -103,7 +100,7 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
 
     @Override
     public EnhancedSqlDialect getSqlDialect() {
-        return sqlDialect;
+        return jpaInference.getSqlDialect();
     }
 
     @Override

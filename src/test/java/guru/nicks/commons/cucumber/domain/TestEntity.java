@@ -1,7 +1,7 @@
 package guru.nicks.commons.cucumber.domain;
 
+import guru.nicks.commons.jpa.JpaInference;
 import guru.nicks.commons.jpa.domain.FullTextSearchAwareEntity;
-import guru.nicks.commons.jpa.repository.EnhancedJpaRepository;
 import guru.nicks.commons.utils.text.NgramUtilsConfig;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -28,27 +28,24 @@ import java.util.function.Supplier;
 @ToString(callSuper = true)
 public class TestEntity extends FullTextSearchAwareEntity<String> {
 
+    @Getter(onMethod_ = @Override)
+    private String id;
+    private String name;
+    private String field1;
+    private String field2;
+    private String field3;
     @Getter(value = AccessLevel.PROTECTED, onMethod_ = @Override)
     @JsonIgnore
     @ToString.Exclude
     @Transient
     private final Collection<Supplier<String>> fullTextSearchDataSuppliers = List.of(
             this::getField1, this::getField2, this::getField3);
-
-    @Getter(onMethod_ = @Override)
-    private String id;
-
-    private String name;
-    private String field1;
-    private String field2;
-    private String field3;
-
     @ToString.Exclude
     private String fullTextSearchData;
 
     @Override
     public int getMaxFullTextSearchDataLength() {
-        return EnhancedJpaRepository.DEFAULT_SQL_DIALECT.getMaxFullTextSearchDataLength();
+        return JpaInference.DEFAULT_SQL_DIALECT.getMaxFullTextSearchDataLength();
     }
 
     @Nonnull

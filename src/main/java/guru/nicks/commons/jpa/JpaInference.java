@@ -1,11 +1,16 @@
 package guru.nicks.commons.jpa;
 
+import guru.nicks.commons.jpa.domain.EnhancedSqlDialect;
+
+import jakarta.annotation.PostConstruct;
 import jakarta.persistence.Column;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.metamodel.EntityType;
 import jakarta.persistence.metamodel.Metamodel;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.hibernate.boot.model.naming.Identifier;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Field;
@@ -16,7 +21,18 @@ import java.util.regex.Pattern;
  */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class JpaInference {
+
+    /**
+     * @see #getSqlDialect()
+     */
+    public static final String SQL_DIALECT_PROPERTY_NAME = "app.database.dialect";
+
+    /**
+     * @see #getSqlDialect()
+     */
+    public static final EnhancedSqlDialect DEFAULT_SQL_DIALECT = EnhancedSqlDialect.POSTGRES;
 
     /**
      * Simple camelCase to snake_case conversion (matches Hibernate 6 default behavior).
@@ -27,6 +43,25 @@ public class JpaInference {
 
     // DI
     private final EntityManager entityManager;
+    private final Environment environment;
+
+    private EnhancedSqlDialect sqlDialect;
+
+    @PostConstruct
+    private void init() {
+        sqlDialect = environment.getProperty(SQL_DIALECT_PROPERTY_NAME, EnhancedSqlDialect.class, DEFAULT_SQL_DIALECT);
+        log.info("Using SQL dialect {}", sqlDialect);
+    }
+
+    /**
+     * Returns the SQL dialect configured. Falls back on {@link #DEFAULT_SQL_DIALECT} if
+     * {@link #SQL_DIALECT_PROPERTY_NAME} property is missing from {@link Environment}.
+     *
+     * @return SQL dialect
+     */
+    public EnhancedSqlDialect getSqlDialect() {
+        return sqlDialect;
+    }
 
     /**
      * Gets the table name from JPA annotations or falls back to {@link #toEscapedSnakeCaseColumnName(String)}.
