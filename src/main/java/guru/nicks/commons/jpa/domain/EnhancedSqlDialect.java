@@ -4,6 +4,8 @@ import com.querydsl.core.types.dsl.BooleanTemplate;
 import com.querydsl.core.types.dsl.StringTemplate;
 import org.springframework.util.unit.DataSize;
 
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Collection;
 
 /**
@@ -49,6 +51,36 @@ public enum EnhancedSqlDialect {
         public String getNextSequenceValueTemplate() {
             return "SELECT nextval('%s')";
         }
+
+        @Override
+        public String getTimestampToDateTemplate() {
+            return "DATE(%s AT TIME ZONE '%s')";
+        }
+
+        @Override
+        public String getTimestampToDateBeginningOfWeekTemplate() {
+            return "DATE(DATE_TRUNC('week', %s AT TIME ZONE '%s'))";
+        }
+
+        @Override
+        public String getTimestampToDateBeginningOfMonthTemplate() {
+            return "DATE(DATE_TRUNC('month', %s AT TIME ZONE '%s'))";
+        }
+
+        @Override
+        public String getTimestampToDateBeginningOfQuarterTemplate() {
+            return "DATE(DATE_TRUNC('quarter', %s AT TIME ZONE '%s'))";
+        }
+
+        @Override
+        public String getTimestampToDateBeginningOfYearTemplate() {
+            return "DATE(DATE_TRUNC('year', %s AT TIME ZONE '%s'))";
+        }
+
+        @Override
+        public String getTimestampAsDateRangeTemplate() {
+            return "DATE(%s AT TIME ZONE '%s') BETWEEN ? AND ?";
+        }
     };
 
     /**
@@ -92,10 +124,64 @@ public enum EnhancedSqlDialect {
     public abstract int getMaxFullTextSearchDataLength();
 
     /**
-     * Template arguments: sequence name (please sanitize it to avoid SQL injection!).
+     * Template arguments: sequence name (please sanitize to avoid SQL injection!).
      *
      * @return template for getting the next value of a sequence
      */
     public abstract String getNextSequenceValueTemplate();
+
+    /**
+     * Template arguments: column name, time zone (e.g. '+05:30' or 'Europe/Paris') - please sanitize them to avoid SQL
+     * injection!
+     *
+     * @return template for getting the date part of a timestamp (e.g., {@link LocalDate} for {@link Instant}) - may
+     *         differ depending on the time zone, e.g. '2026-01-01 00:00:00' in UTC is '2025-12-31 23:00:00' in UTC-1
+     */
+    public abstract String getTimestampToDateTemplate();
+
+    /**
+     * Template arguments: column name, time zone (e.g. '+05:30' or 'Europe/Paris') - please sanitize them to avoid SQL
+     * injection!
+     *
+     * @return template for getting the beginning of the week of a timestamp (the date part only - may differ depending
+     *         on the time zone, e.g. '2026-01-01 00:00:00' in UTC is '2025-12-31 23:00:00' in UTC-1)
+     */
+    public abstract String getTimestampToDateBeginningOfWeekTemplate();
+
+    /**
+     * Template arguments: column name, time zone (e.g. '+05:30' or 'Europe/Paris') - please sanitize them to avoid SQL
+     * injection!
+     *
+     * @return template for getting the beginning of the month of a timestamp (the date part only - may differ depending
+     *         on the time zone, e.g. '2026-01-01 00:00:00' in UTC is '2025-12-31 23:00:00' in UTC-1)
+     */
+    public abstract String getTimestampToDateBeginningOfMonthTemplate();
+
+    /**
+     * Template arguments: column name, time zone (e.g. '+05:30' or 'Europe/Paris') - please sanitize them to avoid SQL
+     * injection!
+     *
+     * @return template for getting the beginning of the quarter of a timestamp (the date part only - may differ
+     *         depending on the time zone, e.g. '2026-01-01 00:00:00' in UTC is '2025-12-31 23:00:00' in UTC-1)
+     */
+    public abstract String getTimestampToDateBeginningOfQuarterTemplate();
+
+    /**
+     * Template arguments: column name, time zone (e.g. '+05:30' or 'Europe/Paris') - please sanitize them to avoid SQL
+     * injection!
+     *
+     * @return template for getting the beginning of the year of a timestamp (the date part - may differ depending on
+     *         the time zone, e.g. '2026-01-01 00:00:00' in UTC is '2025-12-31 23:00:00' in UTC-1)
+     */
+    public abstract String getTimestampToDateBeginningOfYearTemplate();
+
+    /**
+     * Template arguments: column name, time zone (e.g. '+05:30' or 'Europe/Paris') - please sanitize them to avoid SQL
+     * injection! This is an extension of {@code timestamp_column BETWEEN ? AND ?} where the timestamp is first
+     * converted to a date in the given time zone.
+     *
+     * @return template for getting a timestamp as a date range (the date part)
+     */
+    public abstract String getTimestampAsDateRangeTemplate();
 
 }
