@@ -5,7 +5,6 @@ import guru.nicks.commons.jpa.domain.GeometryFactoryType;
 import guru.nicks.commons.jpa.domain.MyJpaProperties;
 import guru.nicks.commons.jpa.repository.EnhancedJpaRepository;
 import guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepository;
-
 import jakarta.persistence.EntityManagerFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.geolatte.geom.codec.Wkb;
