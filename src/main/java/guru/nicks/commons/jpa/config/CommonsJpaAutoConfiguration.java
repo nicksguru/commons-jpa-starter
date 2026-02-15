@@ -5,7 +5,7 @@ import guru.nicks.commons.jpa.domain.GeometryFactoryType;
 import guru.nicks.commons.jpa.domain.MyJpaProperties;
 import guru.nicks.commons.jpa.repository.EnhancedJpaRepository;
 import guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepository;
-import jakarta.persistence.EntityManagerFactory;
+
 import lombok.extern.slf4j.Slf4j;
 import org.geolatte.geom.codec.Wkb;
 import org.geolatte.geom.crs.CoordinateReferenceSystems;
@@ -20,20 +20,19 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
-import org.springframework.orm.jpa.JpaTransactionManager;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
+ * /** Transaction managers and transaction templates aren't created automatically. This is intentional: some projects
+ * may combine JPA transactions with Mongo ones (which requires one of the beans to be primary), some may not.
+ * <p>
  * To inherit your JPA repositories from {@link EnhancedJpaRepository} or {@link EnhancedJpaSearchRepository}, add the
  * following to your application configuration:
  * <pre>
  * &#64;EnableJpaRepositories(
  *     basePackages = "com.yourcompany",
- *     repositoryFactoryBeanClass = EnhancedJpaRepositoryFactoryBean.class
+ *     repositoryFactoryBeanClass =EnhancedJpaRepositoryFactoryBean.class
  * )
  * </pre>
  */
@@ -87,38 +86,6 @@ public class CommonsJpaAutoConfiguration {
     public Wkb.Dialect wkbDialect() {
         log.debug("Building {} bean", Wkb.Dialect.class.getSimpleName());
         return Wkb.Dialect.POSTGIS_EWKB_2;
-    }
-
-    /**
-     * Other DB engines may have own transaction templates. This bean is declared as {@link Primary @Primary} so that
-     * it's used by default. Other beans can be reached as {@code @Qualifier("someOtherTransactionTemplateBean")}.
-     *
-     * @param transactionManager JPA transaction manager
-     * @return JPA transaction template
-     */
-    @ConditionalOnMissingBean(TransactionTemplate.class)
-    @Bean
-    @Primary
-    public TransactionTemplate transactionTemplate(PlatformTransactionManager transactionManager) {
-        log.debug("Building {} bean", TransactionTemplate.class.getSimpleName());
-        return new TransactionTemplate(transactionManager);
-    }
-
-    /**
-     * Other DB engines may have own transaction managers. This bean is declared as {@link Primary @Primary} so that it
-     * is used by default. Other beans can be reached as {@code @Transactional("someOtherTransactionManagerBean")}.
-     *
-     * @param entityManagerFactory JPA entity manager factory
-     * @return JPA transaction manager
-     */
-    @ConditionalOnMissingBean(PlatformTransactionManager.class)
-    @Bean
-    @Primary
-    public PlatformTransactionManager transactionManager(EntityManagerFactory entityManagerFactory) {
-        log.debug("Building {} bean", PlatformTransactionManager.class.getSimpleName());
-        var transactionManager = new JpaTransactionManager();
-        transactionManager.setEntityManagerFactory(entityManagerFactory);
-        return transactionManager;
     }
 
 }
