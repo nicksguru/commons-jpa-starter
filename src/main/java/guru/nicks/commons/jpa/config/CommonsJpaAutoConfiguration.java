@@ -81,7 +81,7 @@ public class CommonsJpaAutoConfiguration {
      *
      * @return bean
      */
-    @ConditionalOnMissingBean(Wkb.Dialect.class)
+    @ConditionalOnMissingBean
     @Bean
     public Wkb.Dialect wkbDialect() {
         log.debug("Building {} bean", Wkb.Dialect.class.getSimpleName());
