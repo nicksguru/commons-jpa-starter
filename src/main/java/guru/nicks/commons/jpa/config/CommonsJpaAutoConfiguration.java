@@ -3,6 +3,7 @@ package guru.nicks.commons.jpa.config;
 import guru.nicks.commons.jpa.GeometryFactoryQualifier;
 import guru.nicks.commons.jpa.domain.GeometryFactoryType;
 import guru.nicks.commons.jpa.domain.MyJpaProperties;
+import guru.nicks.commons.jpa.mapper.AuditDetailsMapper;
 import guru.nicks.commons.jpa.mapper.DataIntegrityViolationExceptionConverter;
 import guru.nicks.commons.jpa.mapper.ObjectOptimisticLockingFailureExceptionConverter;
 import guru.nicks.commons.jpa.mapper.OptimisticLockExceptionConverter;
@@ -19,6 +20,7 @@ import org.hibernate.spatial.dialect.postgis.PGGeometryJdbcType;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
+import org.mapstruct.factory.Mappers;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -128,6 +130,16 @@ public class CommonsJpaAutoConfiguration {
     public ObjectOptimisticLockingFailureExceptionConverter objectOptimisticLockingFailureExceptionConverter() {
         log.debug("Building {} bean", ObjectOptimisticLockingFailureExceptionConverter.class.getSimpleName());
         return new ObjectOptimisticLockingFailureExceptionConverter();
+    }
+
+    /**
+     * Mapper configuration for external MapStruct mappers. Such mappers reside in external libraries/packages which are
+     * not noticed by Spring component scanning.
+     */
+    @ConditionalOnMissingBean
+    @Bean
+    public AuditDetailsMapper auditDetailsMapper() {
+        return Mappers.getMapper(AuditDetailsMapper.class);
     }
 
 }
