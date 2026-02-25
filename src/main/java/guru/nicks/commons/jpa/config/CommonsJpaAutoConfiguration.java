@@ -3,9 +3,13 @@ package guru.nicks.commons.jpa.config;
 import guru.nicks.commons.jpa.GeometryFactoryQualifier;
 import guru.nicks.commons.jpa.domain.GeometryFactoryType;
 import guru.nicks.commons.jpa.domain.MyJpaProperties;
+import guru.nicks.commons.jpa.mapper.DataIntegrityViolationExceptionConverter;
+import guru.nicks.commons.jpa.mapper.ObjectOptimisticLockingFailureExceptionConverter;
+import guru.nicks.commons.jpa.mapper.OptimisticLockExceptionConverter;
 import guru.nicks.commons.jpa.repository.EnhancedJpaRepository;
 import guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepository;
 
+import jakarta.persistence.OptimisticLockException;
 import lombok.extern.slf4j.Slf4j;
 import org.geolatte.geom.codec.Wkb;
 import org.geolatte.geom.crs.CoordinateReferenceSystems;
@@ -20,7 +24,9 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 /**
@@ -86,6 +92,42 @@ public class CommonsJpaAutoConfiguration {
     public Wkb.Dialect wkbDialect() {
         log.debug("Building {} bean", Wkb.Dialect.class.getSimpleName());
         return Wkb.Dialect.POSTGIS_EWKB_2;
+    }
+
+    /**
+     * Exception converter for {@link OptimisticLockException}.
+     *
+     * @return bean
+     */
+    @ConditionalOnMissingBean
+    @Bean
+    public OptimisticLockExceptionConverter optimisticLockExceptionConverter() {
+        log.debug("Building {} bean", OptimisticLockExceptionConverter.class.getSimpleName());
+        return new OptimisticLockExceptionConverter();
+    }
+
+    /**
+     * Exception converter for {@link DataIntegrityViolationException}.
+     *
+     * @return bean
+     */
+    @ConditionalOnMissingBean
+    @Bean
+    public DataIntegrityViolationExceptionConverter dataIntegrityViolationExceptionConverter() {
+        log.debug("Building {} bean", DataIntegrityViolationExceptionConverter.class.getSimpleName());
+        return new DataIntegrityViolationExceptionConverter();
+    }
+
+    /**
+     * Exception converter for {@link ObjectOptimisticLockingFailureException}.
+     *
+     * @return bean
+     */
+    @ConditionalOnMissingBean
+    @Bean
+    public ObjectOptimisticLockingFailureExceptionConverter objectOptimisticLockingFailureExceptionConverter() {
+        log.debug("Building {} bean", ObjectOptimisticLockingFailureExceptionConverter.class.getSimpleName());
+        return new ObjectOptimisticLockingFailureExceptionConverter();
     }
 
 }
