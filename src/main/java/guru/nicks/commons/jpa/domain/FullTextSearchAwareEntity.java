@@ -193,7 +193,7 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
     private void rebuildFullTextSearchNgrams() {
         // compute checksum of raw text, not of ngrams (the point is to avoid calculating ngrams for unchanged text)
         String text = callFullTextSearchDataSuppliers();
-        String newChecksum = ChecksumUtils.computeJsonChecksumBase64(text);
+        String newChecksum = ChecksumUtils.computeJsonChecksumSecure(text);
 
         // ignore blank checksum - this should never happen, but just to prevent the app from crashing in case of a bug
         if (StringUtils.isBlank(newChecksum)) {
