@@ -11,7 +11,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.boot.model.naming.Identifier;
 import org.springframework.core.env.Environment;
-import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Field;
 import java.util.regex.Pattern;
@@ -19,7 +18,6 @@ import java.util.regex.Pattern;
 /**
  * Utility class for inferring JPA table and column names. Requires {@link EntityManager} for JPA Metamodel.
  */
-@Component
 @RequiredArgsConstructor
 @Slf4j
 public class JpaInference {

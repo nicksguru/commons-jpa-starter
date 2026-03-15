@@ -1,6 +1,7 @@
 package guru.nicks.commons.jpa.config;
 
 import guru.nicks.commons.jpa.GeometryFactoryQualifier;
+import guru.nicks.commons.jpa.JpaInference;
 import guru.nicks.commons.jpa.domain.GeometryFactoryType;
 import guru.nicks.commons.jpa.domain.MyJpaProperties;
 import guru.nicks.commons.jpa.mapper.AuditDetailsMapper;
@@ -10,6 +11,7 @@ import guru.nicks.commons.jpa.mapper.OptimisticLockExceptionConverter;
 import guru.nicks.commons.jpa.repository.EnhancedJpaRepository;
 import guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepository;
 
+import jakarta.persistence.EntityManager;
 import jakarta.persistence.OptimisticLockException;
 import lombok.extern.slf4j.Slf4j;
 import org.geolatte.geom.codec.Wkb;
@@ -26,6 +28,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.env.Environment;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -140,6 +143,12 @@ public class CommonsJpaAutoConfiguration {
     @Bean
     public AuditDetailsMapper auditDetailsMapper() {
         return Mappers.getMapper(AuditDetailsMapper.class);
+    }
+
+    @ConditionalOnMissingBean
+    @Bean
+    public JpaInference jpaInference(EntityManager entityManager, Environment environment) {
+        return new JpaInference(entityManager, environment);
     }
 
 }
