@@ -189,8 +189,8 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
      */
     @PrePersist
     @PreUpdate
-    @SuppressWarnings("JpaEntityListenerInspection") // it's OK to have the same callbacks in parent class
-    private void rebuildFullTextSearchNgrams() {
+    @SuppressWarnings("JpaEntityListenerInspection") // it's OK to have the same callback in parent class
+    public void rebuildFullTextSearchNgrams() {
         // compute checksum of raw text, not of ngrams (the point is to avoid calculating ngrams for unchanged text)
         String text = callFullTextSearchDataSuppliers();
         String newChecksum = ChecksumUtils.computeJsonChecksum(text);
