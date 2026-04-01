@@ -6,6 +6,7 @@ import guru.nicks.commons.jpa.domain.GeometryFactoryType;
 import guru.nicks.commons.jpa.domain.MyJpaProperties;
 import guru.nicks.commons.jpa.mapper.AuditDetailsMapper;
 import guru.nicks.commons.jpa.mapper.DataIntegrityViolationExceptionConverter;
+import guru.nicks.commons.jpa.mapper.JtsGeoMapper;
 import guru.nicks.commons.jpa.mapper.ObjectOptimisticLockingFailureExceptionConverter;
 import guru.nicks.commons.jpa.mapper.OptimisticLockExceptionConverter;
 import guru.nicks.commons.jpa.repository.EnhancedJpaRepository;
@@ -135,14 +136,18 @@ public class CommonsJpaAutoConfiguration {
         return new ObjectOptimisticLockingFailureExceptionConverter();
     }
 
-    /**
-     * Mapper configuration for external MapStruct mappers. Such mappers reside in external libraries/packages which are
-     * not noticed by Spring component scanning.
-     */
     @ConditionalOnMissingBean
     @Bean
     public AuditDetailsMapper auditDetailsMapper() {
+        log.debug("Building {} bean", AuditDetailsMapper.class.getSimpleName());
         return Mappers.getMapper(AuditDetailsMapper.class);
+    }
+
+    @ConditionalOnMissingBean
+    @Bean
+    public JtsGeoMapper jtsGeoMapper() {
+        log.debug("Building {} bean", JtsGeoMapper.class.getSimpleName());
+        return Mappers.getMapper(JtsGeoMapper.class);
     }
 
     @ConditionalOnMissingBean
