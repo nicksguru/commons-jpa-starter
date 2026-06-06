@@ -10,7 +10,6 @@ import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import lombok.Builder;
 import lombok.SneakyThrows;
-import lombok.Value;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.PageRequest;
@@ -21,6 +20,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
+import java.util.SequencedSet;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -36,6 +36,7 @@ public class FullTextSearchAwareEntitySteps {
     private String previousChecksum;
     private long operationStartTime;
     private long operationEndTime;
+    private SequencedSet<String> createdChunks;
 
     @Given("a search filter with text {string}")
     public void aSearchFilterWithText(String searchText) {
@@ -60,7 +61,7 @@ public class FullTextSearchAwareEntitySteps {
             pageable = PageRequest.of(pageNumber, pageSize);
         }
 
-        resultPageable = FullTextSearchAwareEntity.initSortCriteria(searchFilter.getSearchText(), pageable);
+        resultPageable = FullTextSearchAwareEntity.initSortCriteria(searchFilter.searchText(), pageable);
     }
 
     @Then("the pageable should have page {int} and size {int}")
@@ -269,6 +270,53 @@ public class FullTextSearchAwareEntitySteps {
                 .isLessThan(maxTime);
     }
 
+    @When("full-text search chunks are created")
+    public void fullTextSearchChunksAreCreated() {
+        String text = entity.getField1();
+        createdChunks = FullTextSearchAwareEntity.createFullTextSearchChunks(text, entity.getNgramUtilsConfig());
+    }
+
+    @Then("the chunks should be valid and contain {string} if present")
+    public void theChunksShouldBeValidAndContainIfPresent(String expectedContent) {
+        assertThat(createdChunks)
+                .as("Chunks should not be null")
+                .isNotNull();
+
+        if (StringUtils.isNotBlank(expectedContent)) {
+            String[] expectedWords = expectedContent.split(" ");
+
+            for (String word : expectedWords) {
+                boolean containsWord = createdChunks.contains(word)
+                        || createdChunks.stream().anyMatch(chunk -> chunk.contains(word));
+
+                assertThat(containsWord)
+                        .as("Chunks '%s' should contain word or its ngrams: '%s'", createdChunks, word)
+                        .isTrue();
+            }
+        }
+    }
+
+    @Then("no chunks should contain SQL injection characters")
+    public void noChunksShouldContainSqlInjectionCharacters() {
+        for (String chunk : createdChunks) {
+            assertThat(chunk)
+                    .as("Chunk should not contain single quote: " + chunk)
+                    .doesNotContain("'");
+
+            assertThat(chunk)
+                    .as("Chunk should not contain double quote: " + chunk)
+                    .doesNotContain("\"");
+
+            assertThat(chunk)
+                    .as("Chunk should not contain double dash: " + chunk)
+                    .doesNotContain("--");
+
+            assertThat(chunk)
+                    .as("Chunk should not contain semicolon: " + chunk)
+                    .doesNotContain(";");
+        }
+    }
+
     // Helper method to call the private assignFullTextSearchData method using reflection
     @SneakyThrows
     private void callAssignFullTextSearchData(TestEntity entity) {
@@ -280,12 +328,10 @@ public class FullTextSearchAwareEntitySteps {
     /**
      * Test search filter.
      */
-    @Value
     @Builder
-    private static class TestSearchFilter {
+    private record TestSearchFilter(
 
-        String searchText;
-
+            String searchText) {
     }
 
 }

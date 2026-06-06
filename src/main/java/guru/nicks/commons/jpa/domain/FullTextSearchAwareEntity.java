@@ -31,6 +31,7 @@ import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.SequencedSet;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static guru.nicks.commons.validation.dsl.ValiDsl.checkNotNull;
 
@@ -138,21 +139,28 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
      * Splits {@code fts} into chunks and adds it to ngrams because if a word is shorter than the minimum ngram length,
      * it'll be omitted otherwise. For instance, 'ox' has no ngrams if min. ngram length is 3.
      *
-     * @param fts    full-text search string
+     * @param text   source text
      * @param config ngram utils configuration
      * @return set of chunks to use for FTS:
      *         <ul>
-     *             <li>original unique words</li>
-     *             <li>original unique words with accented characters reduced (such as  {@code ä → a})</li>
-     *             <li>ngrams created according to {@code config}</li>
+     *             <li>original unique words shorter then {@link NgramUtilsConfig#getMinNgramLength()} - with accents
+     *                 reduced (such as {@code ä → a}) if {@link NgramUtilsConfig#isReduceAccents()} is on and stop
+     *                 words (such as 'the', 'a', 'was', 'I') removed if
+     *                 {@link NgramUtilsConfig#tryEnglishMorphAnalysis()} is on</li>
+     *             <li>ngrams created according to {@link NgramUtilsConfig}</li>
      *         </ul>
      */
-    public static SequencedSet<String> createFullTextSearchChunks(String fts, NgramUtilsConfig config) {
-        // sorted set is downgraded to a linked one to maintain insertion order
-        SequencedSet<String> chunks = new LinkedHashSet<>(TextUtils.collectUniqueWords(fts, false));
-        chunks.addAll(TextUtils.collectUniqueWords(fts, true));
-        chunks.addAll(NgramUtils.createNgrams(fts, NgramUtils.Mode.ALL, config));
+    public static SequencedSet<String> createFullTextSearchChunks(String text, NgramUtilsConfig config) {
+        SequencedSet<String> chunks = TextUtils.collectUniqueWords(text, config.isReduceAccents())
+                .stream()
+                .filter(word -> word.length() < config.getMinNgramLength())
+                // either English morph analysis is off or the word is not an English stop word
+                .filter(word -> !config.tryEnglishMorphAnalysis() || !NgramUtils.englishStopWord(word))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
 
+        chunks.addAll(NgramUtils.createNgrams(text, NgramUtils.Mode.ALL, config));
+
+        // this should never happen after the TextUtils call, but just in case
         if (chunks.stream().anyMatch(ngram ->
                 ngram.contains("'") || ngram.contains("\"") || ngram.contains("--") || ngram.contains(";"))) {
             throw new IllegalArgumentException("Invalid characters (SQL injection?) in search text");
