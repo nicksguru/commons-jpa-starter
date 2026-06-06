@@ -7,6 +7,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.metamodel.EntityType;
 import jakarta.persistence.metamodel.Metamodel;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.boot.model.naming.Identifier;
@@ -43,22 +44,13 @@ public class JpaInference {
     private final EntityManager entityManager;
     private final Environment environment;
 
+    @Getter
     private EnhancedSqlDialect sqlDialect;
 
     @PostConstruct
     private void init() {
         sqlDialect = environment.getProperty(SQL_DIALECT_PROPERTY_NAME, EnhancedSqlDialect.class, DEFAULT_SQL_DIALECT);
         log.info("Using SQL dialect {}", sqlDialect);
-    }
-
-    /**
-     * Returns the SQL dialect configured. Falls back on {@link #DEFAULT_SQL_DIALECT} if
-     * {@link #SQL_DIALECT_PROPERTY_NAME} property is missing from {@link Environment}.
-     *
-     * @return SQL dialect
-     */
-    public EnhancedSqlDialect getSqlDialect() {
-        return sqlDialect;
     }
 
     /**
@@ -77,7 +69,7 @@ public class JpaInference {
             Identifier identifier = Identifier.toIdentifier(tableName);
             tableName = identifier.render();
         }
-        // fallback to JPA Metamodel
+        // fallback on inferring table name from class name using JPA metamodel
         else {
             Metamodel metamodel = entityManager.getMetamodel();
             EntityType<?> entityType = metamodel.entity(entityClass);

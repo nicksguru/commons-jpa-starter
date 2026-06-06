@@ -3,6 +3,7 @@ package guru.nicks.commons.jpa.domain;
 import guru.nicks.commons.utils.crypto.ChecksumUtils;
 import guru.nicks.commons.utils.text.NgramUtils;
 import guru.nicks.commons.utils.text.NgramUtilsConfig;
+import guru.nicks.commons.utils.text.TextUtils;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.annotation.Nonnull;
@@ -26,7 +27,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.Objects;
+import java.util.SequencedSet;
 import java.util.function.Supplier;
 
 import static guru.nicks.commons.validation.dsl.ValiDsl.checkNotNull;
@@ -132,6 +135,33 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
     }
 
     /**
+     * Splits {@code fts} into chunks and adds it to ngrams because if a word is shorter than the minimum ngram length,
+     * it'll be omitted otherwise. For instance, 'ox' has no ngrams if min. ngram length is 3.
+     *
+     * @param fts    full-text search string
+     * @param config ngram utils configuration
+     * @return set of chunks to use for FTS:
+     *         <ul>
+     *             <li>original unique words</li>
+     *             <li>original unique words with accented characters reduced (such as  {@code ä → a})</li>
+     *             <li>ngrams created according to {@code config}</li>
+     *         </ul>
+     */
+    public static SequencedSet<String> createFullTextSearchChunks(String fts, NgramUtilsConfig config) {
+        // sorted set is downgraded to a linked one to maintain insertion order
+        SequencedSet<String> chunks = new LinkedHashSet<>(TextUtils.collectUniqueWords(fts, false));
+        chunks.addAll(TextUtils.collectUniqueWords(fts, true));
+        chunks.addAll(NgramUtils.createNgrams(fts, NgramUtils.Mode.ALL, config));
+
+        if (chunks.stream().anyMatch(ngram ->
+                ngram.contains("'") || ngram.contains("\"") || ngram.contains("--") || ngram.contains(";"))) {
+            throw new IllegalArgumentException("Invalid characters (SQL injection?) in search text");
+        }
+
+        return chunks;
+    }
+
+    /**
      * Assigned automatically during each insert/update using data from {@link #getFullTextSearchDataSuppliers()}.
      * <p>
      * WARNING: this field is only updated when using JPA to save documents. A rough estimate is that 100 words yield
@@ -192,33 +222,37 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
     @SuppressWarnings("JpaEntityListenerInspection") // it's OK to have the same callback in parent class
     public void rebuildFullTextSearchNgrams() {
         // compute checksum of raw text, not of ngrams (the point is to avoid calculating ngrams for unchanged text)
-        String text = callFullTextSearchDataSuppliers();
-        String newChecksum = ChecksumUtils.computeJsonChecksum(text);
+        String ftsText = callFullTextSearchDataSuppliers();
+        String newChecksum = ChecksumUtils.computeJsonChecksum(ftsText);
 
         // ignore blank checksum - this should never happen, but just to prevent the app from crashing in case of a bug
         if (StringUtils.isBlank(newChecksum)) {
             log.error("FTS checksum blank - this should never happen! Rebuilding FTS ngrams for [{}] ID '{}' anyway.",
                     getClass().getName(), getId());
         }
-        // do nothing if search content has not changed since previous ngram computation
+        // do nothing if search content has not changed since previous computation
         else if (newChecksum.equals(fullTextSearchDataChecksum)) {
-            log.trace("Not rebuilding FTS ngrams: content not changed for [{}] ID '{}'", getClass().getName(), getId());
+            if (log.isTraceEnabled()) {
+                log.trace("Not rebuilding FTS chunks: content not changed for [{}] ID '{}'",
+                        getClass().getName(), getId());
+            }
+
             return;
         }
 
         var builder = new StringBuilder(ESTIMATED_FTS_BUILDER_CAPACITY);
-        var ngrams = NgramUtils.createNgrams(text, NgramUtils.Mode.ALL, getNgramUtilsConfig());
-        // stop appending ngrams as soon as the limit is reached
-        ngrams.stream()
-                .takeWhile(ngram -> {
+        var ftsChunks = createFullTextSearchChunks(ftsText, getNgramUtilsConfig());
+        // stop appending chunks as soon as the limit is reached
+        ftsChunks.stream()
+                .takeWhile(chunk -> {
                     int separatorLength = builder.isEmpty() ? 0 : 1;
-                    return builder.length() + separatorLength + ngram.length() <= getMaxFullTextSearchDataLength();
-                }).forEach(ngram -> {
+                    return builder.length() + separatorLength + chunk.length() <= getMaxFullTextSearchDataLength();
+                }).forEach(chunk -> {
                     if (!builder.isEmpty()) {
                         builder.append(" ");
                     }
 
-                    builder.append(ngram);
+                    builder.append(chunk);
                 });
 
         // in Postgres, tsvector doesn't look exactly like this, but it doesn't matter - it can be written as a string
@@ -226,10 +260,10 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
         fullTextSearchDataChecksum = newChecksum;
 
         if (log.isTraceEnabled()) {
-            log.trace("Rebuilt FTS ngrams for [{}] ID '{}': '{}'", getClass().getName(), getId(),
+            log.trace("Rebuilt FTS chunks for [{}] ID '{}': '{}'", getClass().getName(), getId(),
                     FullTextSearchAwareEntity.FULL_TEXT_SEARCH_DATA_PROPERTY);
         } else {
-            log.info("Rebuilt FTS ngrams for [{}] ID '{}':", getClass().getName(), getId());
+            log.info("Rebuilt FTS chunks for [{}] ID '{}':", getClass().getName(), getId());
         }
     }
 

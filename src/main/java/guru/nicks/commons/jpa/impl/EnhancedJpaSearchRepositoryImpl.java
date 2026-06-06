@@ -4,9 +4,7 @@ import guru.nicks.commons.jpa.domain.FullTextSearchAwareEntity;
 import guru.nicks.commons.jpa.repository.EnhancedJpaRepository;
 import guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepository;
 import guru.nicks.commons.utils.ReflectionUtils;
-import guru.nicks.commons.utils.text.NgramUtils;
 import guru.nicks.commons.utils.text.NgramUtilsConfig;
-import guru.nicks.commons.utils.text.TextUtils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,7 +38,6 @@ import java.io.Serializable;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.SequencedSet;
@@ -255,19 +252,7 @@ public class EnhancedJpaSearchRepositoryImpl<T extends Persistable<ID>,
                     + "] to support full-text search");
         }
 
-        // WARNING: if the original string isn't part of the search query, the query may miss such of its words that are
-        // shorter then the minimum ngram length. For instance, 'ox' has no ngrams if min. ngram length is 3. Also,
-        // a sorted set is downgraded to a linked one to maintain order.
-        SequencedSet<String> chunks = new LinkedHashSet<>(TextUtils.collectUniqueWords(fts, false));
-        chunks.addAll(TextUtils.collectUniqueWords(fts, true));
-        chunks.addAll(NgramUtils.createNgrams(fts, NgramUtils.Mode.ALL, getNgramUtilsConfig()));
-
-        // special characters are stripped off, so there's no risk of SQL injection, but validate anyway
-        if (chunks.stream().anyMatch(ngram ->
-                ngram.contains("'") || ngram.contains("\"") || ngram.contains("--") || ngram.contains(";"))) {
-            throw new IllegalArgumentException("Invalid characters (SQL injection?) in search text");
-        }
-
+        SequencedSet<String> chunks = FullTextSearchAwareEntity.createFullTextSearchChunks(fts, getNgramUtilsConfig());
         String q = getSqlDialect().createLenientFullTextSearchCondition(chunks);
 
         // WARNING: don't pass '{0}' to booleanTemplate(), rather embed the value, or the query generated will have
