@@ -202,7 +202,7 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
         }
         // do nothing if search content has not changed since previous ngram computation
         else if (newChecksum.equals(fullTextSearchDataChecksum)) {
-            log.debug("Not rebuilding FTS ngrams: content not changed for [{}] ID '{}'", getClass().getName(), getId());
+            log.trace("Not rebuilding FTS ngrams: content not changed for [{}] ID '{}'", getClass().getName(), getId());
             return;
         }
 
@@ -229,7 +229,7 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
             log.trace("Rebuilt FTS ngrams for [{}] ID '{}': '{}'", getClass().getName(), getId(),
                     FullTextSearchAwareEntity.FULL_TEXT_SEARCH_DATA_PROPERTY);
         } else {
-            log.debug("Rebuilt FTS ngrams for [{}] ID '{}':", getClass().getName(), getId());
+            log.info("Rebuilt FTS ngrams for [{}] ID '{}':", getClass().getName(), getId());
         }
     }
 

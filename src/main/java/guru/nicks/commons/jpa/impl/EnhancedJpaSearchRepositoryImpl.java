@@ -6,6 +6,7 @@ import guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepository;
 import guru.nicks.commons.utils.ReflectionUtils;
 import guru.nicks.commons.utils.text.NgramUtils;
 import guru.nicks.commons.utils.text.NgramUtilsConfig;
+import guru.nicks.commons.utils.text.TextUtils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,8 +40,10 @@ import java.io.Serializable;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.SequencedSet;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicReference;
@@ -218,9 +221,10 @@ public class EnhancedJpaSearchRepositoryImpl<T extends Persistable<ID>,
     /**
      * If search text returned by the given supplier is blank, does nothing and returns. Otherwise:
      * <ul>
-     *  <li>instantiates {@link #getEntityClass()} in order to retrieve
+     *  <li>instantiates {@link #getEntityClass()} (once) in order to retrieve
      *      {@link FullTextSearchAwareEntity#getNgramUtilsConfig()}</li>
-     *  <li>adds search text ngrams (to match them against ngrams stored in DB) to {@code searchBuilder} as 'AND'</li>
+     *  <li>adds search text and its ngrams (to match them against ngrams stored in DB) to {@code searchBuilder} as
+     *      'OR'; the more ngrams match, the greater is the search rank</li>
      *  <li>if {@code pageable} specifies a field to sort by (but not
      *      {@value FullTextSearchAwareEntity#SEARCH_RANK_PSEUDOFIELD}), adds it to {@code query}</li>
      *  <li>otherwise, sets up sort by {@value FullTextSearchAwareEntity#SEARCH_RANK_PSEUDOFIELD} (desc) - adds it to
@@ -251,14 +255,20 @@ public class EnhancedJpaSearchRepositoryImpl<T extends Persistable<ID>,
                     + "] to support full-text search");
         }
 
-        Set<String> ngrams = NgramUtils.createNgrams(fts, NgramUtils.Mode.ALL, getNgramUtilsConfig());
+        // WARNING: if the original string isn't part of the search query, the query may miss such of its words that are
+        // shorter then the minimum ngram length. For instance, 'ox' has no ngrams if min. ngram length is 3. Also,
+        // a sorted set is downgraded to a linked one to maintain order.
+        SequencedSet<String> chunks = new LinkedHashSet<>(TextUtils.collectUniqueWords(fts, false));
+        chunks.addAll(TextUtils.collectUniqueWords(fts, true));
+        chunks.addAll(NgramUtils.createNgrams(fts, NgramUtils.Mode.ALL, getNgramUtilsConfig()));
+
         // special characters are stripped off, so there's no risk of SQL injection, but validate anyway
-        if (ngrams.stream().anyMatch(ngram ->
+        if (chunks.stream().anyMatch(ngram ->
                 ngram.contains("'") || ngram.contains("\"") || ngram.contains("--") || ngram.contains(";"))) {
             throw new IllegalArgumentException("Invalid characters (SQL injection?) in search text");
         }
 
-        String q = getSqlDialect().createLenientFullTextSearchCondition(ngrams);
+        String q = getSqlDialect().createLenientFullTextSearchCondition(chunks);
 
         // WARNING: don't pass '{0}' to booleanTemplate(), rather embed the value, or the query generated will have
         // invalid positional argument indexes (seems their bug)
