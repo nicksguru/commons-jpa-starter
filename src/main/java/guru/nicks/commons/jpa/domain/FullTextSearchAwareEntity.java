@@ -1,6 +1,7 @@
 package guru.nicks.commons.jpa.domain;
 
 import guru.nicks.commons.utils.crypto.ChecksumUtils;
+import guru.nicks.commons.utils.text.EnglishUtils;
 import guru.nicks.commons.utils.text.NgramUtils;
 import guru.nicks.commons.utils.text.NgramUtilsConfig;
 import guru.nicks.commons.utils.text.TextUtils;
@@ -155,7 +156,7 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
                 .stream()
                 .filter(word -> word.length() < config.getMinNgramLength())
                 // either English morph analysis is off or the word is not an English stop word
-                .filter(word -> !config.tryEnglishMorphAnalysis() || !NgramUtils.englishStopWord(word))
+                .filter(word -> !config.tryEnglishMorphAnalysis() || !EnglishUtils.stopWord(word))
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
         chunks.addAll(NgramUtils.createNgrams(text, NgramUtils.Mode.ALL, config));
