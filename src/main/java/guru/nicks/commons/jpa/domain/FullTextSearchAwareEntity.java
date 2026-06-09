@@ -152,6 +152,7 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
      *         </ul>
      */
     public static SequencedSet<String> createFullTextSearchChunks(String text, NgramUtilsConfig config) {
+        // add words that are shorter than the minimum ngram length, otherwise they'll be omitted
         SequencedSet<String> chunks = TextUtils.collectUniqueWords(text, config.isReduceAccents())
                 .stream()
                 .filter(word -> word.length() < config.getMinNgramLength())
