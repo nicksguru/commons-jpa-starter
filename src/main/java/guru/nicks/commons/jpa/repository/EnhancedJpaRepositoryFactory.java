@@ -1,5 +1,6 @@
 package guru.nicks.commons.jpa.repository;
 
+import guru.nicks.commons.jpa.JpaInference;
 import guru.nicks.commons.jpa.impl.EnhancedJpaRepositoryImpl;
 import guru.nicks.commons.jpa.impl.EnhancedJpaSearchRepositoryImpl;
 
@@ -26,6 +27,7 @@ import java.io.Serializable;
 public class EnhancedJpaRepositoryFactory extends JpaRepositoryFactory {
 
     private final ApplicationContext applicationContext;
+    private final JpaInference jpaInference;
     private final ObjectMapper objectMapper;
 
     /**
@@ -36,9 +38,10 @@ public class EnhancedJpaRepositoryFactory extends JpaRepositoryFactory {
      * @param objectMapper       can be {@code null}
      */
     public EnhancedJpaRepositoryFactory(EntityManager entityManager, ApplicationContext applicationContext,
-            ObjectMapper objectMapper) {
+            JpaInference jpaInference, ObjectMapper objectMapper) {
         super(entityManager);
         this.applicationContext = applicationContext;
+        this.jpaInference = jpaInference;
         this.objectMapper = objectMapper;
     }
 
@@ -51,12 +54,12 @@ public class EnhancedJpaRepositoryFactory extends JpaRepositoryFactory {
         // subclass of EnhancedJpaSearchRepository, therefore goes FIRST
         if (EnhancedJpaSearchRepository.class.isAssignableFrom(information.getRepositoryInterface())) {
             return new EnhancedJpaSearchRepositoryImpl(entityInformation, entityManager,
-                    information.getRepositoryInterface(), applicationContext, objectMapper);
+                    information.getRepositoryInterface(), jpaInference, applicationContext, objectMapper);
         }
 
         if (EnhancedJpaRepository.class.isAssignableFrom(information.getRepositoryInterface())) {
             return new EnhancedJpaRepositoryImpl(entityInformation, entityManager,
-                    information.getRepositoryInterface(), applicationContext);
+                    information.getRepositoryInterface(), jpaInference, applicationContext);
         }
 
         // fallback

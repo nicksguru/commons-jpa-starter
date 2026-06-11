@@ -1,5 +1,6 @@
 package guru.nicks.commons.jpa.impl;
 
+import guru.nicks.commons.jpa.JpaInference;
 import guru.nicks.commons.jpa.domain.FullTextSearchAwareEntity;
 import guru.nicks.commons.jpa.repository.EnhancedJpaRepository;
 import guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepository;
@@ -8,6 +9,8 @@ import guru.nicks.commons.utils.text.NgramUtilsConfig;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.EntityPath;
 import com.querydsl.core.types.Order;
@@ -43,7 +46,6 @@ import java.util.Optional;
 import java.util.SequencedSet;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -68,22 +70,25 @@ public class EnhancedJpaSearchRepositoryImpl<T extends Persistable<ID>,
         extends EnhancedJpaRepositoryImpl<T, ID, E>
         implements EnhancedJpaSearchRepository<T, ID, E, F> {
 
+    /**
+     * Keeps {@link FullTextSearchAwareEntity#getNgramUtilsConfig()} for {@code T}. The reason to not use atomics is
+     * that they don't have a mechanism to guarantee that the Lambda computing a value is run only once.
+     * <p>
+     * WARNING: this approach assumes that the config is the same for all instances of each entity class.
+     */
+    private static final Cache<Class<? extends Persistable<?>>, NgramUtilsConfig> ngramUtilsConfigCache =
+            Caffeine.newBuilder().build();
+
     private final ObjectMapper objectMapper;
 
     /**
-     * Keeps {@link FullTextSearchAwareEntity#getNgramUtilsConfig()} for {@code T}.
-     * <p>
-     * WARNING: this approach assumes that the config is the same for all instances of the given class.
-     */
-    private final AtomicReference<NgramUtilsConfig> ngramUtilsConfigRef = new AtomicReference<>();
-
-    /**
-     * Creates a new {@link EnhancedJpaSearchRepositoryImpl} for the given {@link JpaEntityInformation} and
-     * {@link EntityManager}.
+     * Autowiring constructor. Creates a new {@link EnhancedJpaSearchRepositoryImpl} for the given
+     * {@link JpaEntityInformation} and {@link EntityManager}.
      *
      * @param entityInformation           must not be {@code null}
      * @param entityManager               must not be {@code null}
      * @param originalRepositoryInterface declared in the original repository via (after) {@code extends}
+     * @param jpaInference                must not be {@code null}
      * @param applicationContext          must not be {@code null}
      * @param objectMapper                must not be {@code null}
      * @throws IllegalArgumentException if {@code originalRepositoryInterface} is not a subclass of
@@ -92,9 +97,8 @@ public class EnhancedJpaSearchRepositoryImpl<T extends Persistable<ID>,
      */
     public EnhancedJpaSearchRepositoryImpl(JpaEntityInformation<T, ID> entityInformation, EntityManager entityManager,
             Class<? extends EnhancedJpaRepository<T, ID, E>> originalRepositoryInterface,
-            ApplicationContext applicationContext,
-            ObjectMapper objectMapper) {
-        super(entityInformation, entityManager, originalRepositoryInterface, applicationContext);
+            JpaInference jpaInference, ApplicationContext applicationContext, ObjectMapper objectMapper) {
+        super(entityInformation, entityManager, originalRepositoryInterface, jpaInference, applicationContext);
 
         if (!EnhancedJpaSearchRepository.class.isAssignableFrom(originalRepositoryInterface)) {
             throw new IllegalArgumentException("Interface [" + originalRepositoryInterface.getName()
@@ -309,29 +313,17 @@ public class EnhancedJpaSearchRepositoryImpl<T extends Persistable<ID>,
     }
 
     /**
-     * Retrieves ngram configuration for {@link #getEntityClass()} if {@link #ngramUtilsConfigRef} holds {@code null}.
-     * In the latter case, {@link #getEntityClass()} may be instantiated more than once, as a side effect (but
-     * {@code #ngramUtilsConfigRef} is still updated atomically).
+     * Retrieves ngram configuration for {@link #getEntityClass()} once - using a cache.
      * <p>
-     * NOTE: this approach assumes that the <b>ngram configuration is the same for all instances of the class</b>.
+     * WARNING: this approach assumes that the ngram configuration is the same for all instances of each class.
      *
      * @return the ngram configuration for the entity class
      */
     private NgramUtilsConfig getNgramUtilsConfig() {
-        NgramUtilsConfig config = ngramUtilsConfigRef.get();
-        // already initialized
-        if (config != null) {
-            return config;
-        }
-
-        var tmpEntity = (FullTextSearchAwareEntity<?>)
-                ReflectionUtils.instantiateEvenWithoutDefaultConstructor(getEntityClass());
-        config = checkNotNull(tmpEntity.getNgramUtilsConfig(), getEntityClass().getName() + ".getNgramUtilsConfig()");
-
-        // atomically set if still null
-        ngramUtilsConfigRef.compareAndSet(null, config);
-        // never null
-        return ngramUtilsConfigRef.get();
+        return ngramUtilsConfigCache.get(getEntityClass(), clazz -> {
+            var entity = (FullTextSearchAwareEntity<?>) ReflectionUtils.instantiateEvenWithoutDefaultConstructor(clazz);
+            return checkNotNull(entity.getNgramUtilsConfig(), clazz.getName() + ".ngramUtilsConfig");
+        });
     }
 
 }

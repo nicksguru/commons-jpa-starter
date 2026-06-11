@@ -1,5 +1,7 @@
 package guru.nicks.commons.jpa.repository;
 
+import guru.nicks.commons.jpa.JpaInference;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import org.springframework.context.ApplicationContext;
@@ -31,6 +33,7 @@ public class EnhancedJpaRepositoryFactoryBean<
         extends JpaRepositoryFactoryBean<R, T, ID> {
 
     private final ApplicationContext applicationContext;
+    private final JpaInference jpaInference;
     private final ObjectMapper objectMapper;
 
     /**
@@ -40,15 +43,16 @@ public class EnhancedJpaRepositoryFactoryBean<
      * @param applicationContext  application context, must not be {@code null}
      */
     public EnhancedJpaRepositoryFactoryBean(Class<? extends R> repositoryInterface, ObjectMapper objectMapper,
-            ApplicationContext applicationContext) {
+            ApplicationContext applicationContext, JpaInference jpaInference) {
         super(repositoryInterface);
         this.objectMapper = objectMapper;
         this.applicationContext = applicationContext;
+        this.jpaInference = jpaInference;
     }
 
     @Override
     protected RepositoryFactorySupport createRepositoryFactory(EntityManager entityManager) {
-        return new EnhancedJpaRepositoryFactory(entityManager, applicationContext, objectMapper);
+        return new EnhancedJpaRepositoryFactory(entityManager, applicationContext, jpaInference, objectMapper);
     }
 
 }

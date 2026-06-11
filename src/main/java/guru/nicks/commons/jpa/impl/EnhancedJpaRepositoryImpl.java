@@ -27,6 +27,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import static guru.nicks.commons.validation.dsl.ValiDsl.checkNotNull;
+
 /**
  * Base implementation for {@link EnhancedJpaRepository}. This class extends {@link SimpleJpaRepository} and provides
  * custom functionality described in {@link EnhancedJpaRepository}.
@@ -60,6 +62,7 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
      * @param entityInformation           must not be {@code null}
      * @param entityManager               must not be {@code null}
      * @param originalRepositoryInterface declared in the original repository via (after) {@code extends}
+     * @param jpaInference                must not be {@code null}
      * @param applicationContext          must not be {@code null}
      * @throws IllegalArgumentException if {@code originalRepositoryInterface} is not a subclass of
      *                                  {@link EnhancedJpaRepository}
@@ -67,7 +70,7 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
     @SuppressWarnings("unchecked")
     public EnhancedJpaRepositoryImpl(JpaEntityInformation<T, ID> entityInformation, EntityManager entityManager,
             Class<? extends EnhancedJpaRepository<T, ID, E>> originalRepositoryInterface,
-            ApplicationContext applicationContext) {
+            JpaInference jpaInference, ApplicationContext applicationContext) {
         super(entityInformation, entityManager);
 
         if (!EnhancedJpaRepository.class.isAssignableFrom(originalRepositoryInterface)) {
@@ -76,8 +79,8 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
         }
 
         this.entityManager = entityManager;
-        this.applicationContext = applicationContext;
-        jpaInference = applicationContext.getBean(JpaInference.class);
+        this.jpaInference = checkNotNull(jpaInference, "jpaInference");
+        this.applicationContext = checkNotNull(applicationContext, "applicationContext");
 
         entityClass = (Class<T>) ReflectionUtils
                 .findMaterializedGenericType(originalRepositoryInterface,
