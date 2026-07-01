@@ -27,14 +27,18 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 import java.io.Serializable;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+
+import static guru.nicks.commons.validation.dsl.ValiDsl.checkNotNull;
 
 /**
  * JPA entity that keeps track of who and when created/modified it. In Postgres, timestamps have a
  * <a href="https://www.postgresql.org/docs/current/datatype-datetime.html">microsecond precision</a>, which makes
- * them a good default sorting field for records whose primary keys are not time-sortable (UUID v7 are, but exposing the
- * time of record creation may have a potential security or business risk).
+ * them a good default sorting field for records whose primary keys are not time-sortable. UUID v7 are, but exposing the
+ * time of record creation may have a potential security or business risk.
  * <p>
  * This class doesn't keep the full update history (for that, use Hibernate Envers), merely the creation and last update
  * info. Works on the Hibernate level, doesn't need {@link EnableJpaAuditing @EnableJpaAuditing} (the latter works
@@ -163,6 +167,57 @@ public abstract class AuditableEntity<ID> implements Persistable<ID>, Serializab
      */
     public void enforceNew(Boolean isNew) {
         this.isNew = isNew;
+    }
+
+    /**
+     * Adds the entity to the collection. This is a convenience method to avoid NPE on collections and to set
+     * bidirectional links transparently (only if the addition actually took place).
+     * <p>
+     * WARNING: this method is not thread-safe because the underlying collection is not either.
+     *
+     * @param collection              collection to add to; if {@code null}, nothing happens
+     * @param collectionItem          item to add to the collection; if {@code null} or already there (as per
+     *                                {@link Object#equals(Object)}), nothing happens
+     * @param bidirectionalLinkSetter setter to call on {@code collectionItem} to set {@code E} to {@code this}
+     */
+    protected <E extends AuditableEntity<ID>, T> void addToCollectionIfNotAlreadyThere(Collection<T> collection,
+            T collectionItem, BiConsumer<T, E> bidirectionalLinkSetter) {
+        checkNotNull(collection, "collection");
+        checkNotNull(collectionItem, "collectionItem");
+
+        if (collection.isEmpty() || !collection.contains(collectionItem)) {
+            collection.add(collectionItem);
+            bidirectionalLinkSetter.accept(collectionItem, self());
+        }
+    }
+
+    /**
+     * Removes the entity from the collection. This is a convenience method to avoid NPE on collections and to set
+     * bidirectional links transparently (only if the removal actually took place).
+     * <p>
+     * WARNING: this method is not thread-safe because the underlying collection is not either.
+     *
+     * @param collection              collection to remove from; if {@code null}, nothing happens
+     * @param collectionItem          item to remove from the collection (as per {@link Object#equals(Object)}); if
+     *                                {@code null}, nothing happens
+     * @param bidirectionalLinkSetter setter to call on {@code collectionItem} to set {@code E} to {@code null}
+     */
+    protected <E extends AuditableEntity<ID>, T> void removeFromCollectionIfNotNull(Collection<T> collection,
+            T collectionItem, BiConsumer<T, E> bidirectionalLinkSetter) {
+        checkNotNull(bidirectionalLinkSetter, "bidirectionalLinkSetter");
+
+        if ((collection == null) || (collectionItem == null)) {
+            return;
+        }
+
+        if (collection.remove(collectionItem)) {
+            bidirectionalLinkSetter.accept(collectionItem, null);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private <E> E self() {
+        return (E) this;
     }
 
     /**
