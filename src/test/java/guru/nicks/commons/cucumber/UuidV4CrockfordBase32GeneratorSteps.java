@@ -105,10 +105,10 @@ public class UuidV4CrockfordBase32GeneratorSteps {
 
     @Then("the generated ID should contain only valid Crockford Base32 characters")
     public void theGeneratedIdShouldContainOnlyValidCrockfordBase32Characters() {
-        // Crockford Base32 uses: 0123456789ABCDEFGHJKMNPQRSTVWXYZ (lowercase in our implementation)
+        // Crockford Base32 uses: 0123456789ABCDEFGHJKMNPQRSTVWXYZ
         assertThat(jpaWorld.getGeneratedId())
                 .as("generatedId")
-                .matches("[0-9a-hjkmnp-tv-z]+");
+                .matches("[0-9A-HJKMNP-TV-Z]+");
     }
 
     @Then("the entity ID should remain {string}")

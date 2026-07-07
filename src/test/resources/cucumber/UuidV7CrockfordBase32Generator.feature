@@ -23,7 +23,7 @@ Feature: UUID v7 Crockford Base32 Generator
     Then the entity ID should remain "<existingId>"
     Examples:
       | existingId                   |
-      | 0123456789abcdefghjkmnpqrstv |
+      | 0123456789ABCDEFGHJKMNPQRSTV |
       | test-id                      |
       | 12345                        |
 
