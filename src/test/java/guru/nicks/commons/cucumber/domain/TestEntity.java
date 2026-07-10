@@ -8,9 +8,10 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.annotation.Nonnull;
 import jakarta.persistence.Transient;
 import lombok.AccessLevel;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 import lombok.ToString;
 import lombok.experimental.FieldNameConstants;
 import lombok.experimental.SuperBuilder;
@@ -20,12 +21,12 @@ import java.util.List;
 import java.util.function.Supplier;
 
 @NoArgsConstructor
-@Getter
-@Setter
+@Data
+@ToString(callSuper = true)
+@EqualsAndHashCode(callSuper = true)
+// for entity graphs
 @FieldNameConstants
 @SuperBuilder
-// no @EqualsAndHashCode because entities are supposed to be distinguished by their ID
-@ToString(callSuper = true)
 public class TestEntity extends FullTextSearchAwareEntity<String> {
 
     @Getter(onMethod_ = @Override)

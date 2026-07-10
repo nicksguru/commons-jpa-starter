@@ -8,9 +8,8 @@ import jakarta.persistence.MappedSuperclass;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Transient;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 import lombok.ToString;
 import lombok.experimental.FieldNameConstants;
 import lombok.experimental.SuperBuilder;
@@ -46,12 +45,11 @@ import static guru.nicks.commons.validation.dsl.ValiDsl.checkNotNull;
  */
 @MappedSuperclass
 @NoArgsConstructor
-@Getter
-@Setter
-//
+// equals+hashCode are required for addToCollectionIfNotAlreadyThere method
+@Data
+// for entity graphs
 @FieldNameConstants
 @SuperBuilder
-@ToString
 @SuppressWarnings("java:S119") // allow non-single-letter type names in generics
 public abstract class AuditableEntity<ID> implements Persistable<ID>, Serializable {
 

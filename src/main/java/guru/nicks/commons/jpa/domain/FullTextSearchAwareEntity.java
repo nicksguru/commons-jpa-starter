@@ -14,9 +14,9 @@ import jakarta.persistence.MappedSuperclass;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Transient;
-import lombok.Getter;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 import lombok.ToString;
 import lombok.experimental.FieldNameConstants;
 import lombok.experimental.SuperBuilder;
@@ -64,12 +64,12 @@ import static guru.nicks.commons.validation.dsl.ValiDsl.checkNotNull;
  */
 @MappedSuperclass
 @NoArgsConstructor
-@Getter
-@Setter
-//
+@Data
+@ToString(callSuper = true)
+@EqualsAndHashCode(callSuper = true)
+// for entity graphs
 @FieldNameConstants
 @SuperBuilder
-@ToString(callSuper = true)
 @Slf4j
 @SuppressWarnings("java:S119") // allow non-single-letter type names in generics
 public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> {
