@@ -41,6 +41,9 @@ public interface EnhancedJpaSearchRepository<T extends Persistable<ID>,
         F>
         extends EnhancedJpaRepository<T, ID, E> {
 
+    /**
+     * Methods to be implemented in subclasses manually.
+     */
     Set<String> METHODS_TO_IMPLEMENT = Set.of("convertToSearchBuilder", "findByFilter");
 
     /**

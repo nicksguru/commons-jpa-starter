@@ -19,19 +19,24 @@ import org.springframework.data.jpa.repository.support.SimpleJpaRepository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.Serializable;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static guru.nicks.commons.validation.dsl.ValiDsl.checkNotNull;
 
 /**
  * Base implementation for {@link EnhancedJpaRepository}. This class extends {@link SimpleJpaRepository} and provides
- * custom functionality described in {@link EnhancedJpaRepository}.
+ * custom functionality described in {@link EnhancedJpaRepository}. Methods declared in subclasses (repositories) but
+ * not implemented here are implemented by Spring Data the usual way. For example, {@link #getById(Serializable)} is
+ * implemented here and therefore not processed by Spring Data.
  *
  * @param <T>  entity type
  * @param <ID> primary key type
@@ -52,8 +57,7 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
     private final Class<T> entityClass;
     private final Class<E> exceptionClass;
 
-    // Cache the exception instance to avoid expensive reflection on every call
-    private final E cachedExceptionInstance;
+    private final Supplier<E> exceptionSupplier;
 
     /**
      * Creates a new {@link EnhancedJpaRepositoryImpl} for the given {@link JpaEntityInformation} and
@@ -81,6 +85,7 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
         this.entityManager = entityManager;
         this.jpaInference = checkNotNull(jpaInference, "jpaInference");
         this.applicationContext = checkNotNull(applicationContext, "applicationContext");
+        this.originalRepositoryInterface = originalRepositoryInterface;
 
         entityClass = (Class<T>) ReflectionUtils
                 .findMaterializedGenericType(originalRepositoryInterface,
@@ -94,9 +99,25 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
                 .orElseThrow(() -> new IllegalStateException("Failed to infer exception class from "
                         + originalRepositoryInterface));
 
-        this.originalRepositoryInterface = originalRepositoryInterface;
-        // pre-instantiate exception to avoid expensive reflection on every getById call
-        this.cachedExceptionInstance = ReflectionUtils.instantiateEvenWithoutDefaultConstructor(exceptionClass);
+        Constructor<E> exceptionConstructor;
+        try {
+            exceptionConstructor = getExceptionClass().getDeclaredConstructor();
+        } catch (NoSuchMethodException e) {
+            throw new IllegalStateException("Can't find argumentless constructor for exception class ["
+                    + getExceptionClass().getName()
+                    + "]: " + e.getMessage(), e);
+        }
+
+        // wraps reflection exceptions
+        exceptionSupplier = () -> {
+            try {
+                return exceptionConstructor.newInstance();
+            } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+                throw new IllegalStateException("Can't instantiate exception of class ["
+                        + getExceptionClass().getName()
+                        + "]: " + e.getMessage(), e);
+            }
+        };
 
         log.debug("Wrapped {}", originalRepositoryInterface.getName());
     }
@@ -114,6 +135,11 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
     @Override
     public Class<E> getExceptionClass() {
         return exceptionClass;
+    }
+
+    @Override
+    public Supplier<E> getExceptionSupplier() {
+        return exceptionSupplier;
     }
 
     @Override
@@ -194,7 +220,7 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
 
     @Override
     public T getById(ID id) {
-        return findById(id).orElseThrow(() -> cachedExceptionInstance);
+        return findById(id).orElseThrow(getExceptionSupplier());
     }
 
     /**

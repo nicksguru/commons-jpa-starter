@@ -17,6 +17,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 /**
@@ -62,12 +63,21 @@ public interface EnhancedJpaRepository<T extends Persistable<ID>,
     Class<T> getEntityClass();
 
     /**
-     * Implemented in {@link EnhancedJpaRepositoryImpl}.
+     * Implemented in {@link EnhancedJpaRepositoryImpl}. For instantiating the exception class, refer to
+     * {@link #getExceptionSupplier()}.
      *
      * @return class of type {@code E}
      * @throws IllegalStateException if the exception class is not found in the generic type parameters
      */
     Class<E> getExceptionClass();
+
+    /**
+     * Implemented in {@link EnhancedJpaRepositoryImpl}.
+     *
+     * @return argumentless constructor
+     * @throws IllegalStateException if the exception class is not found in the generic type parameters
+     */
+    Supplier<E> getExceptionSupplier();
 
     /**
      * Creates an entity graph for {@link #getEntityClass()}. Implemented in {@link EnhancedJpaRepositoryImpl}.
