@@ -8,11 +8,13 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Persistable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.support.SimpleJpaRepository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
 
 /**
  * {@link SimpleJpaRepository} (Spring Data's implementation of {@link JpaRepository}) has
@@ -71,6 +73,22 @@ public interface JpaCrudService<T extends Persistable<ID>, ID extends Serializab
     @Override
     default Page<T> findAll(Pageable pageable) {
         return getRepository().findAll(pageable);
+    }
+
+    /**
+     * Does conceptually the same as {@link EnhancedJpaRepository#saveAndThen(Persistable, Function)}, but on the
+     * service level, i.e. {@link #save(Persistable)} is called and then the mapper (within the same transaction).
+     *
+     * @param entity entity to save (insert/update)
+     * @param mapper mapper to call for the saved entity
+     * @param <R>    mapper result type
+     * @return what the mapper returns
+     */
+    @Transactional
+    default <R> R saveAndThen(T entity, Function<? super T, R> mapper) {
+        // WARNING: don't just delegate to getRepository().saveAndThen(), as it's crucial to call the SERVICE'S save()
+        // which may be overloaded to do something extra
+        return mapper.apply(save(entity));
     }
 
     /**

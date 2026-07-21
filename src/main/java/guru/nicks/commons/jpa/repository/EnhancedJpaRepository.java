@@ -16,6 +16,7 @@ import java.io.Serializable;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
@@ -132,6 +133,18 @@ public interface EnhancedJpaRepository<T extends Persistable<ID>,
      * @return saved entities
      */
     List<T> saveAllAndFlushInBatches(Collection<T> entities);
+
+    /**
+     * Saves an entity (calls {@link #save(Object)}) and then applies a mapper to it. The key feature of this method is
+     * that the mapper is called <b>within the same transaction</b> as the save operation. Implemented in
+     * {@link EnhancedJpaRepositoryImpl}.
+     *
+     * @param entity entity to save (insert/update)
+     * @param mapper mapper to call for the saved entity
+     * @param <R>    mapper result type
+     * @return what the mapper returns
+     */
+    <R> R saveAndThen(T entity, Function<? super T, R> mapper);
 
     /**
      * Saves a collection of entities in batches, flushing and clearing the persistence context after each batch. This

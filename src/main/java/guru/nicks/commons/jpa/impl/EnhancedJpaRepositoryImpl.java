@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -187,6 +188,12 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
     @Override
     public List<T> saveAllAndFlushInBatches(Collection<T> entities) {
         return saveAllAndFlushInBatches(entities, JpaConstants.INTERNAL_PAGE_SIZE);
+    }
+
+    @Transactional
+    @Override
+    public <R> R saveAndThen(T entity, Function<? super T, R> mapper) {
+        return mapper.apply(save(entity));
     }
 
     @Transactional
