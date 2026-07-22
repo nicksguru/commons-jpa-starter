@@ -76,8 +76,22 @@ public interface JpaCrudService<T extends Persistable<ID>, ID extends Serializab
     }
 
     /**
-     * Does conceptually the same as {@link EnhancedJpaRepository#saveAndThen(Persistable, Function)}, but on the
-     * service level, i.e. {@link #save(Persistable)} is called and then the mapper (within the same transaction).
+     * Calls {@link #getById(Serializable)} and then the mapper (<b>within the same transaction</b>), which is useful to
+     * map lazily loaded properties.
+     *
+     * @param id     entity ID
+     * @param mapper mapper to call for the entity found
+     * @param <R>    mapper result type
+     * @return what the mapper returns
+     */
+    @Transactional
+    default <R> R getByIdAndThen(ID id, Function<? super T, R> mapper) {
+        return mapper.apply(getById(id));
+    }
+
+    /**
+     * Calls {@link #save(Persistable)} and then the mapper (<b>within the same transaction</b>), which is useful to map
+     * lazily loaded properties.
      *
      * @param entity entity to save (insert/update)
      * @param mapper mapper to call for the saved entity
@@ -86,8 +100,6 @@ public interface JpaCrudService<T extends Persistable<ID>, ID extends Serializab
      */
     @Transactional
     default <R> R saveAndThen(T entity, Function<? super T, R> mapper) {
-        // WARNING: don't just delegate to getRepository().saveAndThen(), as it's crucial to call the SERVICE'S save()
-        // which may be overloaded to do something extra
         return mapper.apply(save(entity));
     }
 
