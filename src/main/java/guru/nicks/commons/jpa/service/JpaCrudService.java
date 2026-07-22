@@ -90,8 +90,8 @@ public interface JpaCrudService<T extends Persistable<ID>, ID extends Serializab
     }
 
     /**
-     * Calls {@link #save(Persistable)} and then the mapper (<b>within the same transaction</b>), which is useful to map
-     * lazily loaded properties.
+     * Calls {@link #save(Persistable)} and then the mapper (<b>within the same transaction</b>), which is useful for
+     * mapping lazily loaded properties.
      *
      * @param entity entity to save (insert/update)
      * @param mapper mapper to call for the saved entity
