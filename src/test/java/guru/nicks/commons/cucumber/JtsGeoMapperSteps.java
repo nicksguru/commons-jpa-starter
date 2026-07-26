@@ -1,7 +1,7 @@
 package guru.nicks.commons.cucumber;
 
 import guru.nicks.commons.jpa.mapper.JtsGeoMapper;
-import guru.nicks.commons.rest.v1.dto.GeoPointDto;
+import guru.nicks.commons.rest.dto.GeoPointDto;
 
 import io.cucumber.java.After;
 import io.cucumber.java.Before;

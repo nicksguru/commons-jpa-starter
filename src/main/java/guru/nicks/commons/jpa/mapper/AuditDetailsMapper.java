@@ -2,7 +2,7 @@ package guru.nicks.commons.jpa.mapper;
 
 import guru.nicks.commons.jpa.domain.AuditableEntity;
 import guru.nicks.commons.mapper.DefaultMapStructConfig;
-import guru.nicks.commons.rest.v1.dto.AuditDetailsDto;
+import guru.nicks.commons.rest.dto.AuditDetailsDto;
 
 import org.mapstruct.Mapper;
 

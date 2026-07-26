@@ -4,7 +4,7 @@ import guru.nicks.commons.jpa.domain.AuditDetails;
 import guru.nicks.commons.jpa.domain.AuditableEntity;
 import guru.nicks.commons.jpa.mapper.AuditDetailsMapper;
 import guru.nicks.commons.jpa.mapper.AuditDetailsMapperImpl;
-import guru.nicks.commons.rest.v1.dto.AuditDetailsDto;
+import guru.nicks.commons.rest.dto.AuditDetailsDto;
 
 import io.cucumber.java.After;
 import io.cucumber.java.Before;
