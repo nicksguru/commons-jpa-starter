@@ -10,6 +10,7 @@ import jakarta.persistence.EntityGraph;
 import jakarta.persistence.EntityManager;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.collections4.IterableUtils;
 import org.springframework.context.ApplicationContext;
 import org.springframework.data.domain.Persistable;
 import org.springframework.data.jpa.repository.EntityGraph.EntityGraphType;
@@ -23,6 +24,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -155,32 +157,21 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
 
     @Override
     public List<T> findAllByIdPreserveOrder(Collection<ID> ids) {
-        if (CollectionUtils.isEmpty(ids)) {
-            return new ArrayList<>();
+        // need indexed access to IDs which only List has
+        List<ID> list = (ids instanceof List)
+                ? (List<ID>) ids
+                : IterableUtils.toList(ids);
+
+        // ID -> index of its first occurrence in the request; makes the sort below O(n log n) instead of O(n^2)
+        // (indexOf() would scan the whole list for every element)
+        Map<ID, Integer> id2index = HashMap.newHashMap(list.size());
+        for (int i = 0; i < list.size(); i++) {
+            id2index.putIfAbsent(list.get(i), i);
         }
 
-        // build index map with initial capacity to avoid resizing
-        Map<ID, T> foundEntities = findAllById(ids).stream()
-                .collect(Collectors.toMap(Persistable::getId, entity -> entity,
-                        // merge duplicate keys
-                        (existing, replacement) -> existing,
-                        // not 'new HashMap<>(ids.size())' - that would cause resizing because to the load factor
-                        () -> HashMap.newHashMap(ids.size())
-                ));
-
-        // pre-allocate result list with exact size needed
-        List<T> result = new ArrayList<>(ids.size());
-
-        for (ID id : ids) {
-            T entity = foundEntities.get(id);
-
-            // entity with the given ID was found
-            if (entity != null) {
-                result.add(entity);
-            }
-        }
-
-        return result;
+        return findAllById(list).stream()
+                .sorted(Comparator.comparing(document -> id2index.get(document.getId())))
+                .collect(Collectors.toCollection(ArrayList::new));
     }
 
     @Transactional
