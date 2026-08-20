@@ -4,6 +4,7 @@ import guru.nicks.commons.jpa.JpaInference;
 import guru.nicks.commons.jpa.domain.EnhancedSqlDialect;
 import guru.nicks.commons.jpa.domain.JpaConstants;
 import guru.nicks.commons.jpa.repository.EnhancedJpaRepository;
+import guru.nicks.commons.jpa.repository.EnhancedJpaRepositoryFragment;
 import guru.nicks.commons.utils.ReflectionUtils;
 
 import jakarta.persistence.EntityGraph;
@@ -14,9 +15,6 @@ import org.apache.commons.collections4.IterableUtils;
 import org.springframework.context.ApplicationContext;
 import org.springframework.data.domain.Persistable;
 import org.springframework.data.jpa.repository.EntityGraph.EntityGraphType;
-import org.springframework.data.jpa.repository.support.JpaEntityInformation;
-import org.springframework.data.jpa.repository.support.QuerydslJpaRepository;
-import org.springframework.data.jpa.repository.support.SimpleJpaRepository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.Serializable;
@@ -35,21 +33,28 @@ import java.util.stream.Collectors;
 import static guru.nicks.commons.validation.dsl.ValiDsl.checkNotNull;
 
 /**
- * Base implementation for {@link EnhancedJpaRepository}. This class extends {@link SimpleJpaRepository} and provides
- * custom functionality described in {@link EnhancedJpaRepository}. Methods declared in subclasses (repositories) but
- * not implemented here are implemented by Spring Data the usual way. For example, {@link #getById(Serializable)} is
- * implemented here and therefore not processed by Spring Data.
+ * Fragment implementation for {@link EnhancedJpaRepositoryFragment}. It's a plain class, NOT a Spring bean: it's
+ * instantiated per repository by {@code EnhancedJpaRepositoryFactory#getRepositoryFragments(...)} and therefore must
+ * never become a singleton. The repository base class stays stock {@code SimpleJpaRepository}; methods declared in
+ * {@link EnhancedJpaRepositoryFragment} are routed to this fragment because custom fragments are appended before the
+ * base class in the repository composition.
+ * <p>
+ * Calls that previously relied on inherited {@code SimpleJpaRepository} methods ({@code save}, {@code flush},
+ * {@code findById}, {@code findAllById}) route through {@link #getOriginalRepositoryProxy()} - this preserves
+ * transactions and user overrides.
  *
  * @param <T>  entity type
  * @param <ID> primary key type
  * @param <E>  exception type to throw when entity is not found
  */
-@Transactional(readOnly = true) // borrowed from SimpleJpaRepository
+// fragment methods participate in the repository proxy's transaction interceptor, so mirror SimpleJpaRepository
+// transactional semantics
+@Transactional(readOnly = true)
 @SuppressWarnings("java:S119")  // allow type names like 'ID'
 @Slf4j
-public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Serializable, E extends RuntimeException>
-        extends QuerydslJpaRepository<T, ID>
-        implements EnhancedJpaRepository<T, ID, E> {
+public class EnhancedJpaRepositoryFragmentImpl<T extends Persistable<ID>, ID extends Serializable,
+        E extends RuntimeException>
+        implements EnhancedJpaRepositoryFragment<T, ID, E> {
 
     private final EntityManager entityManager;
     private final ApplicationContext applicationContext;
@@ -62,10 +67,8 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
     private final Supplier<E> exceptionSupplier;
 
     /**
-     * Creates a new {@link EnhancedJpaRepositoryImpl} for the given {@link JpaEntityInformation} and
-     * {@link EntityManager}.
+     * Creates a new {@link EnhancedJpaRepositoryFragmentImpl}.
      *
-     * @param entityInformation           must not be {@code null}
      * @param entityManager               must not be {@code null}
      * @param originalRepositoryInterface declared in the original repository via (after) {@code extends}
      * @param jpaInference                must not be {@code null}
@@ -74,20 +77,19 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
      *                                  {@link EnhancedJpaRepository}
      */
     @SuppressWarnings("unchecked")
-    public EnhancedJpaRepositoryImpl(JpaEntityInformation<T, ID> entityInformation, EntityManager entityManager,
+    public EnhancedJpaRepositoryFragmentImpl(EntityManager entityManager,
             Class<? extends EnhancedJpaRepository<T, ID, E>> originalRepositoryInterface,
             JpaInference jpaInference, ApplicationContext applicationContext) {
-        super(entityInformation, entityManager);
+        this.originalRepositoryInterface = checkNotNull(originalRepositoryInterface, "originalRepositoryInterface");
 
         if (!EnhancedJpaRepository.class.isAssignableFrom(originalRepositoryInterface)) {
             throw new IllegalArgumentException("Original repository interface must be a subclass of "
                     + EnhancedJpaRepository.class.getName());
         }
 
-        this.entityManager = entityManager;
+        this.entityManager = checkNotNull(entityManager, "entityManager");
         this.jpaInference = checkNotNull(jpaInference, "jpaInference");
         this.applicationContext = checkNotNull(applicationContext, "applicationContext");
-        this.originalRepositoryInterface = originalRepositoryInterface;
 
         entityClass = (Class<T>) ReflectionUtils
                 .findMaterializedGenericType(originalRepositoryInterface,
@@ -156,6 +158,11 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
     }
 
     @Override
+    public T getById(ID id) {
+        return getOriginalRepositoryProxy().findById(id).orElseThrow(getExceptionSupplier());
+    }
+
+    @Override
     public List<T> findAllByIdPreserveOrder(Collection<ID> ids) {
         // need indexed access to IDs which only List has
         List<ID> list = (ids instanceof List)
@@ -169,7 +176,7 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
             id2index.putIfAbsent(list.get(i), i);
         }
 
-        return findAllById(list).stream()
+        return getOriginalRepositoryProxy().findAllById(list).stream()
                 .sorted(Comparator.comparing(document -> id2index.get(document.getId())))
                 .collect(Collectors.toCollection(ArrayList::new));
     }
@@ -187,31 +194,28 @@ public class EnhancedJpaRepositoryImpl<T extends Persistable<ID>, ID extends Ser
             return new ArrayList<>();
         }
 
+        // route save/flush through the repository proxy to preserve transactions and user overrides
+        EnhancedJpaRepository<T, ID, E> repository = getOriginalRepositoryProxy();
         List<T> savedEntities = new ArrayList<>(entities.size());
         int i = 0;
 
         for (T entity : entities) {
-            savedEntities.add(save(entity));
+            savedEntities.add(repository.save(entity));
             i++;
 
             if (i % batchSize == 0) {
-                flush();
+                repository.flush();
                 entityManager.clear();
             }
         }
 
         // Flush any remaining entities that didn't complete a full batch
         if (i % batchSize != 0) {
-            flush();
+            repository.flush();
             entityManager.clear();
         }
 
         return savedEntities;
-    }
-
-    @Override
-    public T getById(ID id) {
-        return findById(id).orElseThrow(getExceptionSupplier());
     }
 
     /**

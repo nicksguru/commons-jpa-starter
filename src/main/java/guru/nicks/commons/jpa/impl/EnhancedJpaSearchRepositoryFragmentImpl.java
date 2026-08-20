@@ -4,6 +4,7 @@ import guru.nicks.commons.jpa.JpaInference;
 import guru.nicks.commons.jpa.domain.FullTextSearchAwareEntity;
 import guru.nicks.commons.jpa.repository.EnhancedJpaRepository;
 import guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepository;
+import guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepositoryFragment;
 import guru.nicks.commons.utils.ReflectionUtils;
 import guru.nicks.commons.utils.text.NgramUtilsConfig;
 
@@ -32,7 +33,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Persistable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.EntityGraph.EntityGraphType;
-import org.springframework.data.jpa.repository.support.JpaEntityInformation;
 import org.springframework.data.jpa.repository.support.Querydsl;
 import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,23 +52,27 @@ import java.util.stream.Collectors;
 import static guru.nicks.commons.validation.dsl.ValiDsl.checkNotNull;
 
 /**
- * Base implementation for {@link EnhancedJpaSearchRepository}. This class extends {@link EnhancedJpaRepositoryImpl} and
- * provides search-related functionality described in {@link EnhancedJpaSearchRepository}.
+ * Fragment implementation for {@link EnhancedJpaSearchRepositoryFragment}. Extends
+ * {@link EnhancedJpaRepositoryFragmentImpl} and provides search-related functionality described in
+ * {@link EnhancedJpaSearchRepositoryFragment}. It's a plain class, NOT a Spring bean: it's instantiated per repository
+ * by {@code EnhancedJpaRepositoryFactory#getRepositoryFragments(...)} and therefore must never become a singleton.
  *
  * @param <T>  entity type
  * @param <ID> primary key type
  * @param <E>  exception type to throw when entity is not found
  * @param <F>  search filter type
  */
-@Transactional(readOnly = true) // borrowed from SimpleJpaRepository
+// fragment methods participate in the repository proxy's transaction interceptor, so mirror SimpleJpaRepository
+// transactional semantics
+@Transactional(readOnly = true)
 @SuppressWarnings("java:S119")  // allow type names like 'ID'
 @Slf4j
-public class EnhancedJpaSearchRepositoryImpl<T extends Persistable<ID>,
+public class EnhancedJpaSearchRepositoryFragmentImpl<T extends Persistable<ID>,
         ID extends Serializable,
         E extends RuntimeException,
         F>
-        extends EnhancedJpaRepositoryImpl<T, ID, E>
-        implements EnhancedJpaSearchRepository<T, ID, E, F> {
+        extends EnhancedJpaRepositoryFragmentImpl<T, ID, E>
+        implements EnhancedJpaSearchRepositoryFragment<T, ID, E, F> {
 
     /**
      * Keeps {@link FullTextSearchAwareEntity#getNgramUtilsConfig()} for {@code T}. The reason to not use atomics is
@@ -82,10 +86,8 @@ public class EnhancedJpaSearchRepositoryImpl<T extends Persistable<ID>,
     private final ObjectMapper objectMapper;
 
     /**
-     * Autowiring constructor. Creates a new {@link EnhancedJpaSearchRepositoryImpl} for the given
-     * {@link JpaEntityInformation} and {@link EntityManager}.
+     * Creates a new {@link EnhancedJpaSearchRepositoryFragmentImpl}.
      *
-     * @param entityInformation           must not be {@code null}
      * @param entityManager               must not be {@code null}
      * @param originalRepositoryInterface declared in the original repository via (after) {@code extends}
      * @param jpaInference                must not be {@code null}
@@ -93,12 +95,12 @@ public class EnhancedJpaSearchRepositoryImpl<T extends Persistable<ID>,
      * @param objectMapper                must not be {@code null}
      * @throws IllegalArgumentException if {@code originalRepositoryInterface} is not a subclass of
      *                                  {@link EnhancedJpaSearchRepository} or does not implement all required methods
-     *                                  (as per {@link EnhancedJpaSearchRepository#METHODS_TO_IMPLEMENT})
+     *                                  (as per {@link EnhancedJpaSearchRepositoryFragment#METHODS_TO_IMPLEMENT})
      */
-    public EnhancedJpaSearchRepositoryImpl(JpaEntityInformation<T, ID> entityInformation, EntityManager entityManager,
+    public EnhancedJpaSearchRepositoryFragmentImpl(EntityManager entityManager,
             Class<? extends EnhancedJpaRepository<T, ID, E>> originalRepositoryInterface,
             JpaInference jpaInference, ApplicationContext applicationContext, ObjectMapper objectMapper) {
-        super(entityInformation, entityManager, originalRepositoryInterface, jpaInference, applicationContext);
+        super(entityManager, originalRepositoryInterface, jpaInference, applicationContext);
 
         if (!EnhancedJpaSearchRepository.class.isAssignableFrom(originalRepositoryInterface)) {
             throw new IllegalArgumentException("Interface [" + originalRepositoryInterface.getName()
@@ -197,12 +199,12 @@ public class EnhancedJpaSearchRepositoryImpl<T extends Persistable<ID>,
     }
 
     @SuppressWarnings("unchecked")
-    @Override
+    @Override // calls parent method and casts the result
     protected Class<? extends EnhancedJpaSearchRepository<T, ID, E, F>> getOriginalRepositoryInterface() {
         return (Class<? extends EnhancedJpaSearchRepository<T, ID, E, F>>) super.getOriginalRepositoryInterface();
     }
 
-    @Override
+    @Override // calls parent method and casts the result
     protected EnhancedJpaSearchRepository<T, ID, E, F> getOriginalRepositoryProxy() {
         return (EnhancedJpaSearchRepository<T, ID, E, F>) super.getOriginalRepositoryProxy();
     }
