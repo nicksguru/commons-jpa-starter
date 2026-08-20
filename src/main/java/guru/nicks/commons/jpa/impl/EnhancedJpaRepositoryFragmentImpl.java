@@ -159,7 +159,9 @@ public class EnhancedJpaRepositoryFragmentImpl<T extends Persistable<ID>, ID ext
 
     @Override
     public T getById(ID id) {
-        return getOriginalRepositoryProxy().findById(id).orElseThrow(getExceptionSupplier());
+        return getOriginalRepositoryProxy()
+                .findById(id)
+                .orElseThrow(getExceptionSupplier());
     }
 
     @Override

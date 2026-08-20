@@ -5,14 +5,14 @@
     <parent>
         <groupId>guru.nicks.commons</groupId>
         <artifactId>parent</artifactId>
-        <version>100.260819.0</version><!-- BUNDLE_VERSION -->
+        <version>100.260820.0</version><!-- BUNDLE_VERSION -->
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
     <!-- groupId is redundant (inherited from parent), but required by Maven Central -->
     <groupId>guru.nicks.commons</groupId>
     <artifactId>jpa-starter</artifactId>
-    <version>100.260819.0</version><!-- BUNDLE_VERSION -->
+    <version>100.260820.0</version><!-- BUNDLE_VERSION -->
 
     <name>Nicks.Guru Commons JPA Starter</name>
     <description>JPA starter</description>
@@ -80,6 +80,12 @@
             <groupId>io.hypersistence</groupId>
             <artifactId>hypersistence-utils-hibernate-62</artifactId>
         </dependency>
+        <!-- in-memory DB for the repository regression tests -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
 
         <!-- @Builder, @Slf4j, etc. -->
         <dependency>
@@ -88,4 +94,43 @@
             <scope>provided</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- generates Querydsl Q-classes for TEST entities: the stock Spring Data JPA Querydsl fragment
+                 resolves entity paths via the Q-class convention (SimpleEntityPathResolver), so repositories
+                 operating on test entities need the generated classes too -->
+            <plugin>
+                <groupId>com.mysema.maven</groupId>
+                <artifactId>apt-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>test-process</id>
+                        <goals>
+                            <goal>test-process</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/generated-test-sources/java</outputDirectory>
+                            <processors>
+                                <!-- must be listed explicitly: the '<processors>' config maps to javac's -processor
+                                     option which disables classpath processor discovery, so Lombok has to be named
+                                     here too (it strips onMethod_/onParam_ before annotation attribution) -->
+                                <processor>lombok.launch.AnnotationProcessorHider$AnnotationProcessor</processor>
+                                <processor>com.querydsl.apt.jpa.JPAAnnotationProcessor</processor>
+                            </processors>
+                        </configuration>
+                    </execution>
+                </executions>
+                <dependencies>
+                    <!-- test entities rely on Lombok (e.g. @Getter(onMethod_ = @Override)) which must run in the
+                         forked APT compilation too, otherwise annotation attribution fails -->
+                    <dependency>
+                        <groupId>org.projectlombok</groupId>
+                        <artifactId>lombok</artifactId>
+                        <version>${lombok.version}</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+        </plugins>
+    </build>
 </project>
