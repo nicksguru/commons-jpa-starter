@@ -28,8 +28,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Regression tests pinning the hybrid fragment infrastructure of {@code EnhancedJpaRepository}: fragment method
- * routing (getById), Querydsl execution on the same proxy, transactional semantics of fragment methods, batch saves,
+ * Regression tests pinning the hybrid fragment infrastructure of {@code EnhancedJpaRepository}: fragment method routing
+ * (getById), Querydsl execution on the same proxy, transactional semantics of fragment methods, batch saves,
  * order-preserving reads, entity graphs, and the untouched stock repository path. All calls run against a real
  * EntityManager backed by H2.
  */
@@ -65,7 +65,7 @@ class EnhancedJpaRepositoryFragmentTests {
     }
 
     /**
-     * Fragment metadata (entity/exception class, dialect, exception supplier) is correctly inferred from repository
+     * Fragment metadata (entity/exception class, dialect, exception class) is correctly inferred from repository
      * generics.
      */
     @Test
@@ -73,8 +73,7 @@ class EnhancedJpaRepositoryFragmentTests {
         assertThat(documentRepository.getEntityClass()).isEqualTo(TestDocument.class);
         assertThat(documentRepository.getExceptionClass()).isEqualTo(TestDocumentNotFoundException.class);
         assertThat(documentRepository.getSqlDialect()).isEqualTo(EnhancedSqlDialect.POSTGRES);
-        assertThat(documentRepository.getExceptionSupplier().get())
-                .isInstanceOf(TestDocumentNotFoundException.class);
+        assertThat(documentRepository.getExceptionClass()).isAssignableFrom(TestDocumentNotFoundException.class);
     }
 
     /**
@@ -118,7 +117,7 @@ class EnhancedJpaRepositoryFragmentTests {
                 .isPresent();
 
         assertThat(documentRepository.findAll(document.getString(TestDocument.Fields.userId).eq("user-1"),
-                        Sort.by(TestDocument.Fields.name)))
+                Sort.by(TestDocument.Fields.name)))
                 .as("findAll by predicate, sorted")
                 .extracting(TestDocument::getName)
                 .containsExactly("Alpha document", "Beta document");
@@ -130,8 +129,8 @@ class EnhancedJpaRepositoryFragmentTests {
 
     /**
      * A fragment read method that uses the EntityManager directly (findByIdWithFetchGraph) runs inside a read-only
-     * transaction: without the fragment's class-level @Transactional(readOnly = true) there would be no transaction
-     * at all during the EntityManager#find call.
+     * transaction: without the fragment's class-level @Transactional(readOnly = true) there would be no transaction at
+     * all during the EntityManager#find call.
      */
     @Test
     void fragmentReadMethodRunsInReadOnlyTransaction() {
@@ -150,8 +149,8 @@ class EnhancedJpaRepositoryFragmentTests {
     }
 
     /**
-     * saveAllAndFlushInBatches runs all batches inside ONE read-write transaction started by the fragment method:
-     * inner save()/flush() calls join it instead of opening their own transactions.
+     * saveAllAndFlushInBatches runs all batches inside ONE read-write transaction started by the fragment method: inner
+     * save()/flush() calls join it instead of opening their own transactions.
      */
     @Test
     void saveAllAndFlushInBatchesRunsInSingleReadWriteTransaction() {
@@ -264,8 +263,8 @@ class EnhancedJpaRepositoryFragmentTests {
     }
 
     /**
-     * createEntityGraph + findByIdWithFetchGraph eagerly fetches the lazy association: it's accessible on the
-     * detached entity without a LazyInitializationException, unlike a plain findById.
+     * createEntityGraph + findByIdWithFetchGraph eagerly fetches the lazy association: it's accessible on the detached
+     * entity without a LazyInitializationException, unlike a plain findById.
      */
     @Test
     void findByIdWithFetchGraphEagerlyFetchesAssociation() {

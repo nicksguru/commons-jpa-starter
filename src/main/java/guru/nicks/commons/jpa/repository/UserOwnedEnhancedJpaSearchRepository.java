@@ -1,5 +1,7 @@
 package guru.nicks.commons.jpa.repository;
 
+import guru.nicks.commons.utils.ExceptionUtils;
+
 import org.springframework.data.domain.Persistable;
 import org.springframework.data.repository.NoRepositoryBean;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,7 +45,8 @@ public interface UserOwnedEnhancedJpaSearchRepository<
      */
     @Transactional(readOnly = true)
     default T getByIdAndUserId(ID id, String userId) {
-        return findByIdAndUserId(id, userId).orElseThrow(getExceptionSupplier());
+        return findByIdAndUserId(id, userId).orElseThrow(() ->
+                ExceptionUtils.getExceptionFactory(getExceptionClass()).apply(null));
     }
 
     /**

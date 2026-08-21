@@ -4,6 +4,7 @@ import guru.nicks.commons.jpa.JpaInference;
 import guru.nicks.commons.jpa.domain.EnhancedSqlDialect;
 import guru.nicks.commons.jpa.domain.JpaConstants;
 import guru.nicks.commons.jpa.impl.EnhancedJpaRepositoryFragmentImpl;
+import guru.nicks.commons.utils.ExceptionUtils;
 
 import jakarta.persistence.EntityGraph;
 import org.springframework.beans.BeanInstantiationException;
@@ -17,7 +18,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 /**
@@ -68,20 +68,12 @@ public interface EnhancedJpaRepositoryFragment<T extends Persistable<ID>,
 
     /**
      * Implemented in {@link EnhancedJpaRepositoryFragmentImpl}. For instantiating the exception class, refer to
-     * {@link #getExceptionSupplier()}.
+     * {@link ExceptionUtils#getExceptionFactory(Class)}.
      *
      * @return class of type {@code E}
      * @throws IllegalStateException if the exception class is not found in the generic type parameters
      */
     Class<E> getExceptionClass();
-
-    /**
-     * Implemented in {@link EnhancedJpaRepositoryFragmentImpl}.
-     *
-     * @return argumentless constructor
-     * @throws IllegalStateException if the exception class is not found in the generic type parameters
-     */
-    Supplier<E> getExceptionSupplier();
 
     /**
      * Creates an entity graph for {@link #getEntityClass()}. Implemented in {@link EnhancedJpaRepositoryFragmentImpl}.

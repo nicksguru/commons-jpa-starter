@@ -5,6 +5,7 @@ import guru.nicks.commons.jpa.domain.EnhancedSqlDialect;
 import guru.nicks.commons.jpa.domain.JpaConstants;
 import guru.nicks.commons.jpa.repository.EnhancedJpaRepository;
 import guru.nicks.commons.jpa.repository.EnhancedJpaRepositoryFragment;
+import guru.nicks.commons.utils.ExceptionUtils;
 import guru.nicks.commons.utils.ReflectionUtils;
 
 import jakarta.persistence.EntityGraph;
@@ -18,8 +19,6 @@ import org.springframework.data.jpa.repository.EntityGraph.EntityGraphType;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.Serializable;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -27,7 +26,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static guru.nicks.commons.validation.dsl.ValiDsl.checkNotNull;
@@ -63,8 +61,6 @@ public class EnhancedJpaRepositoryFragmentImpl<T extends Persistable<ID>, ID ext
     private final Class<? extends EnhancedJpaRepository<T, ID, E>> originalRepositoryInterface;
     private final Class<T> entityClass;
     private final Class<E> exceptionClass;
-
-    private final Supplier<E> exceptionSupplier;
 
     /**
      * Creates a new {@link EnhancedJpaRepositoryFragmentImpl}.
@@ -102,26 +98,8 @@ public class EnhancedJpaRepositoryFragmentImpl<T extends Persistable<ID>, ID ext
                         EnhancedJpaRepository.class, Throwable.class)
                 .orElseThrow(() -> new IllegalStateException("Failed to infer exception class from "
                         + originalRepositoryInterface));
-
-        Constructor<E> exceptionConstructor;
-        try {
-            exceptionConstructor = getExceptionClass().getDeclaredConstructor();
-        } catch (NoSuchMethodException e) {
-            throw new IllegalStateException("Can't find argumentless constructor for exception class ["
-                    + getExceptionClass().getName()
-                    + "]: " + e.getMessage(), e);
-        }
-
-        // wraps reflection exceptions
-        exceptionSupplier = () -> {
-            try {
-                return exceptionConstructor.newInstance();
-            } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
-                throw new IllegalStateException("Can't instantiate exception of class ["
-                        + getExceptionClass().getName()
-                        + "]: " + e.getMessage(), e);
-            }
-        };
+        // resolve exception factory to fail-fast without waiting until it's needed
+        ExceptionUtils.getExceptionFactory(getExceptionClass());
 
         log.debug("Wrapped {}", originalRepositoryInterface.getName());
     }
@@ -142,11 +120,6 @@ public class EnhancedJpaRepositoryFragmentImpl<T extends Persistable<ID>, ID ext
     }
 
     @Override
-    public Supplier<E> getExceptionSupplier() {
-        return exceptionSupplier;
-    }
-
-    @Override
     public EntityGraph<T> createEntityGraph() {
         return entityManager.createEntityGraph(getEntityClass());
     }
@@ -161,7 +134,7 @@ public class EnhancedJpaRepositoryFragmentImpl<T extends Persistable<ID>, ID ext
     public T getById(ID id) {
         return getOriginalRepositoryProxy()
                 .findById(id)
-                .orElseThrow(getExceptionSupplier());
+                .orElseThrow(() -> ExceptionUtils.getExceptionFactory(getExceptionClass()).apply(null));
     }
 
     @Override
