@@ -5,7 +5,6 @@ import guru.nicks.commons.jpa.domain.FullTextSearchAwareEntity;
 import guru.nicks.commons.jpa.repository.EnhancedJpaRepository;
 import guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepository;
 import guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepositoryFragment;
-import guru.nicks.commons.utils.ReflectionUtils;
 import guru.nicks.commons.utils.text.NgramUtilsConfig;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -26,6 +25,7 @@ import jakarta.persistence.EntityGraph;
 import jakarta.persistence.EntityManager;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.BeanUtils;
 import org.springframework.context.ApplicationContext;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -315,15 +315,15 @@ public class EnhancedJpaSearchRepositoryFragmentImpl<T extends Persistable<ID>,
     }
 
     /**
-     * Retrieves ngram configuration for {@link #getEntityClass()} once - using a cache.
-     * <p>
-     * WARNING: this approach assumes that the ngram configuration is the same for all instances of each class.
+     * Retrieves ngram configuration for {@link #getEntityClass()} once - using a cache. This approach assumes that the
+     * ngram configuration is the same for all instances of each class.
      *
      * @return the ngram configuration for the entity class
      */
     private NgramUtilsConfig getNgramUtilsConfig() {
         return ngramUtilsConfigCache.get(getEntityClass(), clazz -> {
-            var entity = (FullTextSearchAwareEntity<?>) ReflectionUtils.instantiateEvenWithoutDefaultConstructor(clazz);
+            // each entity must have a default constructor
+            var entity = (FullTextSearchAwareEntity<?>) BeanUtils.instantiateClass(clazz);
             return checkNotNull(entity.getNgramUtilsConfig(), clazz.getName() + ".ngramUtilsConfig");
         });
     }
