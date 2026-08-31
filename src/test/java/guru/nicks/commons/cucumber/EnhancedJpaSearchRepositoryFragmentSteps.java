@@ -1,20 +1,28 @@
 package guru.nicks.commons.cucumber;
 
 import guru.nicks.commons.cucumber.world.TextWorld;
+import guru.nicks.commons.jpa.JpaInference;
+import guru.nicks.commons.jpa.impl.EnhancedJpaSearchRepositoryFragmentImpl;
 import guru.nicks.commons.jpa.it.domain.TestAuthor;
 import guru.nicks.commons.jpa.it.domain.TestDocument;
 import guru.nicks.commons.jpa.it.domain.TestDocumentFilter;
+import guru.nicks.commons.jpa.it.domain.TestDocumentNotFoundException;
 import guru.nicks.commons.jpa.it.repo.TestAuthorRepository;
 import guru.nicks.commons.jpa.it.repo.TestDocumentRepository;
+import guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepository;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.Predicate;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationContext;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -34,20 +42,19 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
 
     // DI
     private final TestDocumentRepository documentRepository;
-
-    // DI
     private final TestAuthorRepository authorRepository;
-
-    // DI
+    private final EntityManager entityManager;
     private final TransactionTemplate transactionTemplate;
-
-    // DI
     private final TextWorld textWorld;
+    private final JpaInference jpaInference;
+    private final ApplicationContext applicationContext;
+    private final ObjectMapper objectMapper;
 
     private Page<TestDocument> resultPage;
     private Predicate jsonPredicate;
     private BooleanBuilder builder;
     private AtomicBoolean conditionInvoked;
+    private long rebuiltCount;
 
     /**
      * Persists the default document set: three documents spread over two authors and users, with JSON metadata.
@@ -68,10 +75,10 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
     /**
      * Searches documents with a name/user filter, pagination and sorting.
      *
-     * @param name substring to match the document name against
+     * @param name   substring to match the document name against
      * @param userId exact user ID to match
-     * @param page 1-based page number
-     * @param size page size
+     * @param page   1-based page number
+     * @param size   page size
      */
     @When("documents are searched with a filter for name {string} and user {string} requesting page {int} of size {int} sorted by name")
     public void documentsAreSearchedWithAFilterForNameAndUser(String name, String userId, int page, int size) {
@@ -170,6 +177,69 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
         assertThat(resultPage.getContent())
                 .extracting(TestDocument::getName)
                 .containsExactly(names.split(","));
+    }
+
+    /**
+     * Corrupts the stored ngram data of all documents via a bulk JPQL update, bypassing {@code @PreUpdate} callbacks.
+     * This simulates rows left stale by a change in ngram generation logic (e.g. a lemmatization fix): the checksum
+     * still matches the raw text (which is untouched), so a regular save would never rebuild the ngrams.
+     */
+    @When("the full-text search data of all documents is corrupted by a bulk JPQL update")
+    public void theFullTextSearchDataOfAllDocumentsIsCorruptedByABulkJpqlUpdate() {
+        transactionTemplate.executeWithoutResult(tx ->
+                entityManager.createQuery(
+                                "UPDATE TestDocument d SET d.fullTextSearchData = :corrupted")
+                        .setParameter("corrupted", "stale")
+                        .executeUpdate());
+    }
+
+    /**
+     * Invokes the batch reindex on the document repository.
+     */
+    @When("the full-text search data is rebuilt")
+    public void theFullTextSearchDataIsRebuilt() {
+        rebuiltCount = documentRepository.rebuildFullTextSearchData();
+    }
+
+    /**
+     * Verifies the number of entities processed by the last batch reindex.
+     *
+     * @param expected expected processed entity count
+     */
+    @Then("the number of processed documents should be {int}")
+    public void theNumberOfProcessedDocumentsShouldBe(int expected) {
+        assertThat(rebuiltCount)
+                .as("processed documents")
+                .isEqualTo(expected);
+    }
+
+    /**
+     * Verifies the first (highest-ranked) document name of the last search result page.
+     *
+     * @param name expected first document name
+     */
+    @Then("the first page content name should be {string}")
+    public void theFirstPageContentNameShouldBe(String name) {
+        assertThat(resultPage.getContent())
+                .as("page content")
+                .isNotEmpty();
+        assertThat(resultPage.getContent().getFirst().getName())
+                .as("first (highest-ranked) page content name")
+                .isEqualTo(name);
+    }
+
+    /**
+     * Invokes the batch reindex on a fragment wired for a non-FTS entity type (constructed directly, without the
+     * repository proxy) and captures the failure.
+     */
+    @When("the full-text search data is rebuilt for a repository of a non-FTS entity type")
+    public void theFullTextSearchDataIsRebuiltForARepositoryOfANonFtsEntityType() {
+        try {
+            new EnhancedJpaSearchRepositoryFragmentImpl<>(entityManager, NonFtsSearchRepository.class, jpaInference,
+                    applicationContext, objectMapper).rebuildFullTextSearchData();
+        } catch (RuntimeException e) {
+            textWorld.setLastException(e);
+        }
     }
 
     /**
@@ -322,5 +392,30 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
                 .metadata(metadata)
                 .author(author)
                 .build();
+    }
+
+    /**
+     * Enhanced search repository over a non-FTS entity ({@link TestAuthor}), for pinning the fail-fast rejection of
+     * {@code rebuildFullTextSearchData()}. Never registered as a bean: the fragment is instantiated directly in steps,
+     * so no schema or repository scaffolding is needed.
+     */
+    private interface NonFtsSearchRepository
+            extends EnhancedJpaSearchRepository<TestAuthor, String, TestDocumentNotFoundException, Void> {
+
+        /**
+         * {@inheritDoc}
+         */
+        @Override
+        default BooleanBuilder convertToSearchBuilder(Void filter) {
+            return new BooleanBuilder();
+        }
+
+        /**
+         * {@inheritDoc}
+         */
+        @Override
+        default Page<TestAuthor> findByFilter(Void filter, Pageable pageable) {
+            return Page.empty();
+        }
     }
 }

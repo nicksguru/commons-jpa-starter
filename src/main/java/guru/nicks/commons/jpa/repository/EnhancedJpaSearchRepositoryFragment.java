@@ -12,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Persistable;
 import org.springframework.data.repository.NoRepositoryBean;
+import org.springframework.data.repository.core.RepositoryMetadata;
 
 import java.io.Serializable;
 import java.util.Optional;
@@ -22,7 +23,7 @@ import java.util.function.Supplier;
 /**
  * Search-related custom functionality contributed to {@link EnhancedJpaSearchRepository} as a repository fragment.
  * Implemented in {@link EnhancedJpaSearchRepositoryFragmentImpl} which is attached to repository proxies via
- * {@link EnhancedJpaRepositoryFactory#getRepositoryFragments(org.springframework.data.repository.core.RepositoryMetadata)}.
+ * {@link EnhancedJpaRepositoryFactory#getRepositoryFragments(RepositoryMetadata)}.
  * <p>
  * NOTE: deliberately extends nothing - only then does Spring Data treat this interface as a fragment and not as a
  * repository. Fragment discovery through {@link EnhancedJpaSearchRepository} is transitive, so user repositories
@@ -37,14 +38,12 @@ import java.util.function.Supplier;
  *
  * @param <T>  entity type (if full-text search is required, must inherit from {@link FullTextSearchAwareEntity})
  * @param <ID> primary key type
- * @param <E>  exception type to throw when entity is not found
  * @param <F>  search filter type (pass {@code Void} for no filter)
  */
 @NoRepositoryBean
 @SuppressWarnings("java:S119")  // allow type names like 'ID'
 public interface EnhancedJpaSearchRepositoryFragment<T extends Persistable<ID>,
         ID extends Serializable,
-        E extends RuntimeException,
         F> {
 
     /**
@@ -112,6 +111,28 @@ public interface EnhancedJpaSearchRepositoryFragment<T extends Persistable<ID>,
      * @throws IllegalArgumentException error encoding value as JSON
      */
     Predicate createJsonContainsPredicate(String propertyName, Object value);
+
+    /**
+     * Rebuilds full-text search ngrams of <b>all</b> entities of this repository's domain type (<b>method implemented
+     * in {@link EnhancedJpaSearchRepositoryFragmentImpl}</b>). Batch maintenance operation for reindexing existing rows
+     * after a change in ngram generation logic (for example, a lemmatization fix) that altered ngram output without
+     * changing the raw source text: because {@link FullTextSearchAwareEntity#rebuildFullTextSearchData()}
+     * short-circuits on a checksum computed over the raw text (not over the ngrams), such rows never self-heal on
+     * regular updates.
+     * <p>
+     * The implementation invalidates each entity's stored checksum first (sets it to {@code null}) so the rebuild
+     * cannot short-circuit, then triggers {@link FullTextSearchAwareEntity#rebuildFullTextSearchData()} explicitly and
+     * persists the change. Entities are processed in pages with the persistence context cleared after each batch,
+     * keeping memory consumption bounded regardless of table size.
+     * <p>
+     * Runs in the caller's transaction if one is active (it must be read-write); otherwise starts its own single
+     * read-write transaction spanning all batches - a failure rolls back everything processed so far.
+     *
+     * @return number of entities processed (entities whose freshly built ngrams equal the stored ones are counted too,
+     *         but produce no UPDATE)
+     * @throws IllegalStateException domain type does not extend {@link FullTextSearchAwareEntity}
+     */
+    long rebuildFullTextSearchData();
 
     /**
      * Adds a search condition to query if the search value is not {@code null}.

@@ -2,6 +2,7 @@ package guru.nicks.commons.jpa.impl;
 
 import guru.nicks.commons.jpa.JpaInference;
 import guru.nicks.commons.jpa.domain.FullTextSearchAwareEntity;
+import guru.nicks.commons.jpa.domain.JpaConstants;
 import guru.nicks.commons.jpa.repository.EnhancedJpaRepository;
 import guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepository;
 import guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepositoryFragment;
@@ -23,6 +24,7 @@ import com.querydsl.core.types.dsl.StringTemplate;
 import com.querydsl.jpa.impl.JPAQuery;
 import jakarta.persistence.EntityGraph;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.metamodel.EntityType;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
@@ -72,7 +74,7 @@ public class EnhancedJpaSearchRepositoryFragmentImpl<T extends Persistable<ID>,
         E extends RuntimeException,
         F>
         extends EnhancedJpaRepositoryFragmentImpl<T, ID, E>
-        implements EnhancedJpaSearchRepositoryFragment<T, ID, E, F> {
+        implements EnhancedJpaSearchRepositoryFragment<T, ID, F> {
 
     /**
      * Keeps {@link FullTextSearchAwareEntity#getNgramUtilsConfig()} for {@code T}. The reason to not use atomics is
@@ -196,6 +198,53 @@ public class EnhancedJpaSearchRepositoryFragmentImpl<T extends Persistable<ID>,
         String sql = String.format(Locale.US, getSqlDialect().getJsonContainsTemplate(),
                 propertyName, fieldValueAsJson);
         return Expressions.booleanTemplate(sql);
+    }
+
+    @Transactional
+    @Override
+    public long rebuildFullTextSearchData() {
+        // a wrong domain type is a configuration error
+        if (!FullTextSearchAwareEntity.class.isAssignableFrom(getEntityClass())) {
+            throw new IllegalStateException("Entity class [" + getEntityClass().getName()
+                    + "] must extend [" + FullTextSearchAwareEntity.class.getName()
+                    + "] to support full-text search reindexing");
+        }
+
+        // route reads/writes through the repository proxy to preserve transactions and user overrides
+        EnhancedJpaSearchRepository<T, ID, E, F> repository = getOriginalRepositoryProxy();
+        String idAttributeName = getIdAttributeName();
+        long processedCount = 0;
+        int pageNumber = 0;
+        Page<T> page;
+
+        do {
+            // sort by ID for deterministic pagination: rows change between page fetches, IDs don't
+            page = repository.findAll(PageRequest.of(pageNumber, JpaConstants.INTERNAL_PAGE_SIZE,
+                    Sort.by(Sort.Direction.ASC, idAttributeName)));
+
+            for (T entity : page) {
+                var ftsAwareEntity = (FullTextSearchAwareEntity<?>) entity;
+
+                // Invalidate the stored checksum first: a null checksum never equals the freshly computed one, so
+                // the rebuild below cannot short-circuit. This is what makes rows with stale ngrams but a
+                // still-matching raw-text checksum (e.g. after a lemmatization fix) get rebuilt.
+                ftsAwareEntity.setFullTextSearchDataChecksum(null);
+
+                // Run the rebuild explicitly. The @PreUpdate callback at flush time then cheaply short-circuits on
+                // the already-updated checksum instead of recomputing the ngrams a second time.
+                ftsAwareEntity.rebuildFullTextSearchData();
+            }
+
+            repository.saveAllAndFlush(page.getContent());
+            // release memory
+            getEntityManager().clear();
+
+            processedCount += page.getNumberOfElements();
+            pageNumber++;
+        } while (page.hasNext());
+
+        log.info("Rebuilt FTS data of [{}]: {} entities processed", getEntityClass().getName(), processedCount);
+        return processedCount;
     }
 
     @SuppressWarnings("unchecked")
@@ -326,6 +375,17 @@ public class EnhancedJpaSearchRepositoryFragmentImpl<T extends Persistable<ID>,
             var entity = (FullTextSearchAwareEntity<?>) BeanUtils.instantiateClass(clazz);
             return checkNotNull(entity.getNgramUtilsConfig(), clazz.getName() + ".ngramUtilsConfig");
         });
+    }
+
+    /**
+     * Resolves the ID attribute (property) name of {@link #getEntityClass()} from the JPA metamodel, for building the
+     * deterministic sort used by {@link #rebuildFullTextSearchData()}.
+     *
+     * @return ID attribute name of the entity
+     */
+    private String getIdAttributeName() {
+        EntityType<T> entityType = getEntityManager().getMetamodel().entity(getEntityClass());
+        return entityType.getId(entityType.getIdType().getJavaType()).getName();
     }
 
 }

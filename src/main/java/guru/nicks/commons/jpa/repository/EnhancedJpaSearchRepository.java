@@ -31,6 +31,6 @@ public interface EnhancedJpaSearchRepository<T extends Persistable<ID>,
         ID extends Serializable,
         E extends RuntimeException,
         F>
-        extends EnhancedJpaRepository<T, ID, E>, EnhancedJpaSearchRepositoryFragment<T, ID, E, F> {
+        extends EnhancedJpaRepository<T, ID, E>, EnhancedJpaSearchRepositoryFragment<T, ID, F> {
 
 }

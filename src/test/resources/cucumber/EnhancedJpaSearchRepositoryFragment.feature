@@ -2,7 +2,8 @@
 Feature: EnhancedJpaSearchRepositoryFragment functionality
   EnhancedJpaSearchRepositoryFragment should correctly apply filter predicates with pagination and sorting, add
   conditions only for non-null/non-blank values, JSON-quote values against SQL injection, reject invalid property
-  names, and find entities by ngram fuzzy match via the H2-emulated FULL_TEXT_SEARCH and JSON_CONTAINS functions
+  names, find entities by ngram fuzzy match via the H2-emulated FULL_TEXT_SEARCH and JSON_CONTAINS functions, and
+  batch-rebuild stale FTS ngrams via rebuildFullTextSearchData()
 
   Scenario: findByFilter applies the filter predicate, pagination and sorting at once
     Given the default documents exist
@@ -59,3 +60,22 @@ Feature: EnhancedJpaSearchRepositoryFragment functionality
     Then the total elements should be 3
     When documents are searched with a blank full-text search
     Then the total elements should be 3
+
+  Scenario: rebuildFullTextSearchData rebuilds stale FTS data
+    Given the default documents exist
+    When the full-text search data of all documents is corrupted by a bulk JPQL update
+    And documents are searched with a full-text search for "alpa"
+    Then the total elements should be 0
+    When the full-text search data is rebuilt
+    Then the number of processed documents should be 3
+    When documents are searched with a full-text search for "red document"
+    Then the total elements should be 3
+    And the first page content name should be "Alpha red document"
+
+  Scenario: rebuildFullTextSearchData returns 0 when there is nothing to rebuild
+    When the full-text search data is rebuilt
+    Then the number of processed documents should be 0
+
+  Scenario: rebuildFullTextSearchData rejects a repository of a non-FTS entity type
+    When the full-text search data is rebuilt for a repository of a non-FTS entity type
+    Then IllegalStateException should be thrown
