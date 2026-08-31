@@ -34,6 +34,8 @@ import java.util.Base64;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.SequencedSet;
+import java.util.Set;
+import java.util.SortedSet;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -106,7 +108,7 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
     private static final byte[] FTS_VALUE_SEPARATOR_BYTES = " ".getBytes(StandardCharsets.UTF_8);
 
     /**
-     * Assigned by {@link #rebuildFullTextSearchNgrams()} and stored in DB to avoid costly ngram recalculation if the
+     * Assigned by {@link #rebuildFullTextSearchData()} and stored in DB to avoid costly ngram recalculation if the
      * search content has not changed.
      */
     @ToString.Exclude
@@ -147,8 +149,7 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
     }
 
     /**
-     * Splits {@code fts} into chunks and adds it to ngrams because if a word is shorter than the minimum ngram length,
-     * it'll be omitted otherwise. For instance, 'ox' has no ngrams if min. ngram length is 3.
+     * Splits text into chunks for FTS.
      *
      * @param text   source text
      * @param config ngram utils configuration
@@ -162,15 +163,18 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
      *         </ul>
      */
     public static SequencedSet<String> createFullTextSearchChunks(String text, NgramUtilsConfig config) {
+        // tokenize once - both the short-words phase and ngram creation below reuse the same word set
+        SequencedSet<String> uniqueWords = TextUtils.collectUniqueWords(text, config.isReduceAccents());
+
         // add words that are shorter than the minimum ngram length, otherwise they'll be omitted
-        SequencedSet<String> chunks = TextUtils.collectUniqueWords(text, config.isReduceAccents())
-                .stream()
+        SequencedSet<String> chunks = uniqueWords.stream()
                 .filter(word -> word.length() < config.getMinNgramLength())
-                // either English morph analysis is off or the word is not an English stop word
-                .filter(word -> !config.tryEnglishMorphAnalysis() || !EnglishUtils.stopWord(word))
+                // either English morph analysis is off or the word is not an English stop word (fast path - words
+                // from collectUniqueWords are already lowercase and trimmed)
+                .filter(word -> !config.tryEnglishMorphAnalysis() || !EnglishUtils.stopWord(word, true))
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        chunks.addAll(NgramUtils.createNgrams(text, NgramUtils.Mode.ALL, config));
+        chunks.addAll(NgramUtils.createNgrams(uniqueWords, NgramUtils.Mode.ALL, config));
 
         // this should never happen after the TextUtils call, but just in case
         if (chunks.stream().anyMatch(ngram ->
@@ -179,35 +183,6 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
         }
 
         return chunks;
-    }
-
-    /**
-     * Creates a fresh SHA-256 digest - the same algorithm {@link ChecksumUtils#computeJsonChecksum(Object)} uses.
-     *
-     * @return new digest instance (not thread-safe, never shared)
-     * @throws IllegalStateException SHA-256 is unavailable (impossible on a compliant JVM)
-     */
-    @Nonnull
-    private static MessageDigest newSha256Digest() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        }
-        // every Java platform implementation is required to support SHA-256 - unreachable
-        catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 algorithm not available", e);
-        }
-    }
-
-    /**
-     * Completes the streaming checksum in exactly the format {@link ChecksumUtils#computeJsonChecksum(Object)}
-     * produces: basic (non-MIME, non-url-safe) Base64 with padding and no line wrapping.
-     *
-     * @param digest digest fed with the content bytes
-     * @return Base64-encoded checksum
-     */
-    @Nonnull
-    private static String encodeChecksum(MessageDigest digest) {
-        return Base64.getEncoder().encodeToString(digest.digest());
     }
 
     /**
@@ -272,7 +247,7 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
     @PrePersist
     @PreUpdate
     @SuppressWarnings("JpaEntityListenerInspection") // it's OK to have the same callback in parent class
-    public void rebuildFullTextSearchNgrams() {
+    public void rebuildFullTextSearchData() {
         // compute checksum of raw text, not of ngrams (the point is to avoid calculating ngrams for unchanged text)
         FullTextSearchData ftsData = callFullTextSearchDataSuppliers();
         String newChecksum = ftsData.checksum();
@@ -292,33 +267,16 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
             return;
         }
 
-        // content has changed - only now pay for materializing the joined text
-        String ftsText = ftsData.builder().toString();
-        var builder = new StringBuilder(ESTIMATED_FTS_BUILDER_CAPACITY);
-        var ftsChunks = createFullTextSearchChunks(ftsText, getNgramUtilsConfig());
-
-        // stop appending chunks as soon as the limit is reached
-        ftsChunks.stream()
-                .takeWhile(chunk -> {
-                    int separatorLength = builder.isEmpty() ? 0 : 1;
-                    return builder.length() + separatorLength + chunk.length() <= getMaxFullTextSearchDataLength();
-                }).forEach(chunk -> {
-                    if (!builder.isEmpty()) {
-                        builder.append(" ");
-                    }
-
-                    builder.append(chunk);
-                });
-
-        // in Postgres, tsvector doesn't look exactly like this, but it doesn't matter - it can be written as a string
-        setFullTextSearchData(builder.toString());
+        // Content has changed - only now pay for materializing the joined text.
+        // In Postgres, tsvector doesn't look exactly like this, but it doesn't matter - it can be written as a string.
+        setFullTextSearchData(buildFullTextSearchData(ftsData.builder(), getNgramUtilsConfig()));
         fullTextSearchDataChecksum = newChecksum;
 
         if (log.isTraceEnabled()) {
-            log.trace("Rebuilt FTS chunks for [{}] ID '{}': '{}'", getClass().getName(), getId(),
+            log.trace("Content changed - rebuilt FTS data for [{}] ID '{}': '{}'", getClass().getName(), getId(),
                     FullTextSearchAwareEntity.FULL_TEXT_SEARCH_DATA_PROPERTY);
         } else {
-            log.info("Rebuilt FTS chunks for [{}] ID '{}':", getClass().getName(), getId());
+            log.info("Content changed - rebuilt FTS data for [{}] ID '{}':", getClass().getName(), getId());
         }
     }
 
@@ -338,7 +296,7 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
     @Nonnull
     private FullTextSearchData callFullTextSearchDataSuppliers() {
         Collection<Supplier<String>> suppliers = getFullTextSearchDataSuppliers();
-        var digest = newSha256Digest();
+        var digest = createEmptyDigest();
 
         // no suppliers - digest of zero bytes, matching the checksum of an empty text
         if (CollectionUtils.isEmpty(suppliers)) {
@@ -364,16 +322,171 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
                 continue;
             }
 
+            // update BOTH the builder AND the digest
             if (!sb.isEmpty()) {
                 sb.append(" ");
                 digest.update(FTS_VALUE_SEPARATOR_BYTES);
             }
 
+            // update BOTH the builder AND the digest
             sb.append(value);
             digest.update(value.getBytes(StandardCharsets.UTF_8));
         }
 
+        // at this point, the builder is not materialized, but the digest is
         return new FullTextSearchData(sb, encodeChecksum(digest));
+    }
+
+    /**
+     * Appends a single chunk using the following semantics: a single space before every chunk except the first, with
+     * the separator counted as part of the chunk when checking the length cap.
+     *
+     * @param builder   builder accumulating the chunks
+     * @param chunk     chunk to append
+     * @param maxLength maximum length of the full-text search data
+     * @return {@code true} if the chunk fit and was appended, {@code false} if it would exceed the length cap
+     */
+    private boolean appendFullTextSearchChunk(StringBuilder builder, String chunk, int maxLength) {
+        int separatorLength = builder.isEmpty() ? 0 : 1;
+
+        // stop appending chunks as soon as the limit is reached (break, not skip)
+        if (builder.length() + separatorLength + chunk.length() > maxLength) {
+            return false;
+        }
+
+        if (!builder.isEmpty()) {
+            builder.append(' ');
+        }
+
+        builder.append(chunk);
+        return true;
+    }
+
+    /**
+     * Checks each word's characters for the SQL-injection-suspicious ones (''', '"', ';' and the '--' sequence). Every
+     * chunk is a substring of a word (short words are words, ngrams are word substrings, lemmas derive from words), so
+     * word-level checking is equivalent to chunk-level checking - and it also covers chunks the length cap would drop.
+     *
+     * @param uniqueWords unique words extracted from the search text
+     * @throws IllegalArgumentException a word contains characters suspicious of SQL injection (effectively unreachable
+     *                                  because tokenization strips them - kept for behavioral compatibility)
+     */
+    private void validateWordsAreSqlInjectionFree(Set<String> uniqueWords) {
+        for (String word : uniqueWords) {
+            // flag: the previous character was '-', to detect the '--' sequence
+            boolean previousCharWasHyphen = false;
+
+            for (int i = 0, wordLength = word.length(); i < wordLength; i++) {
+                char character = word.charAt(i);
+
+                if ((character == '\'')
+                        || (character == '"')
+                        || (character == ';')
+                        || (previousCharWasHyphen && (character == '-'))) {
+                    throw new IllegalArgumentException("Invalid characters (SQL injection?) in search text");
+                }
+
+                previousCharWasHyphen = (character == '-');
+            }
+        }
+    }
+
+    /**
+     * Creates a fresh SHA-256 digest - the same algorithm {@link ChecksumUtils#computeJsonChecksum(Object)} uses.
+     *
+     * @return new digest instance (not thread-safe, never shared)
+     * @throws IllegalStateException SHA-256 is unavailable (impossible on a compliant JVM)
+     */
+    @Nonnull
+    private MessageDigest createEmptyDigest() {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        }
+        // every Java platform implementation is required to support SHA-256 - unreachable
+        catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 algorithm not available", e);
+        }
+    }
+
+    /**
+     * Completes the streaming checksum in exactly the format {@link ChecksumUtils#computeJsonChecksum(Object)}
+     * produces: basic (non-MIME, non-url-safe) Base64 with padding and no line wrapping.
+     *
+     * @param digest digest fed with the content bytes
+     * @return Base64-encoded checksum
+     */
+    @Nonnull
+    private String encodeChecksum(MessageDigest digest) {
+        return Base64.getEncoder().encodeToString(digest.digest());
+    }
+
+    /**
+     * Validates the tokenized words, then appends short words and ngrams into a pre-sized builder, stopping at the
+     * first chunk that would exceed the length cap.
+     *
+     * @param source builder holding joined search text to create chunks of
+     * @param config ngram utils configuration
+     * @return builder holding the length-capped chunk sequence, pre-sized to never exceed the length cap
+     * @throws IllegalArgumentException search text contains characters suspicious of SQL injection (effectively
+     *                                  unreachable because tokenization strips them - kept for behavioral
+     *                                  compatibility)
+     */
+    @Nonnull
+    private String buildFullTextSearchData(StringBuilder source, NgramUtilsConfig config) {
+        // tokenize once - validation, the short-words phase and ngram creation below reuse the same word set
+        SortedSet<String> uniqueWords = TextUtils.collectUniqueWords(source.toString(), config.isReduceAccents());
+        validateWordsAreSqlInjectionFree(uniqueWords);
+
+        int minNgramLength = config.getMinNgramLength();
+        int maxPrefixNgramLength = config.getMaxPrefixNgramLength();
+        int maxInfixNgramLength = config.getMaxInfixNgramLength();
+        int maxNgramCount = config.getMaxNgramCount();
+
+        // Pre-size the builder to min(cap, estimate): never allocate past the DB cap, yet skip the 1024 -> 1MB
+        // doubling chain for large word sets. The estimate is deliberately rough (estimated chunk count times the
+        // average chunk length) because StringBuilder grows gracefully when it is off.
+        int averageChunkLength = (minNgramLength + Math.max(maxPrefixNgramLength, maxInfixNgramLength)) / 2 + 1;
+        int estimatedNgramCount = Math.min(uniqueWords.size() * NgramUtils.ASSUMED_NGRAMS_PER_WORD, maxNgramCount);
+        int estimatedTotalLength = (uniqueWords.size() + estimatedNgramCount) * averageChunkLength;
+
+        // hoisted once per rebuild: the length cap used to be a virtual call per chunk, and the config getters are
+        // interface default methods that may be computed in subclasses
+        int maxLength = getMaxFullTextSearchDataLength();
+        int estimatedCapacity = Math.min(Math.max(0, maxLength),
+                Math.max(ESTIMATED_FTS_BUILDER_CAPACITY, estimatedTotalLength));
+        var builder = new StringBuilder(estimatedCapacity);
+
+        // phase 1: short words (alphabetical, from the sorted word set) - appended only if shorter than the minimum
+        // ngram length (otherwise they're already part of their ngrams) and not filtered out as English stop words
+        boolean lengthCapReached = false;
+
+        for (String word : uniqueWords) {
+            if (word.length() >= minNgramLength) {
+                continue;
+            }
+
+            // either English morph analysis is off or the word is not an English stop word (fast path - words are
+            // already lowercase and trimmed)
+            if (config.tryEnglishMorphAnalysis() && EnglishUtils.stopWord(word, true)) {
+                continue;
+            }
+
+            if (!appendFullTextSearchChunk(builder, word, maxLength)) {
+                lengthCapReached = true;
+                break;
+            }
+        }
+
+        // phase 2: ngrams in creation order; skipped entirely if the length cap already stopped the short-words phase
+        if (!lengthCapReached) {
+            for (String ngram : NgramUtils.createNgrams(uniqueWords, NgramUtils.Mode.ALL, config)) {
+                if (!appendFullTextSearchChunk(builder, ngram, maxLength)) {
+                    break;
+                }
+            }
+        }
+
+        return builder.toString();
     }
 
     /**

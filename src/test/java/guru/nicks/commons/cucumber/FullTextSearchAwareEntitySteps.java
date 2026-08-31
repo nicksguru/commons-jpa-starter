@@ -373,7 +373,7 @@ public class FullTextSearchAwareEntitySteps {
         previousFullTextSearchData = configurableEntity.getFullTextSearchData();
         previousChecksum = configurableEntity.getFullTextSearchDataChecksum();
 
-        configurableEntity.rebuildFullTextSearchNgrams();
+        configurableEntity.rebuildFullTextSearchData();
     }
 
     /**
@@ -502,7 +502,7 @@ public class FullTextSearchAwareEntitySteps {
     // invokes the public rebuildFullTextSearchNgrams method directly
     @SneakyThrows
     private void callAssignFullTextSearchData(TestEntity entity) {
-        Method method = FullTextSearchAwareEntity.class.getDeclaredMethod("rebuildFullTextSearchNgrams");
+        Method method = FullTextSearchAwareEntity.class.getDeclaredMethod("rebuildFullTextSearchData");
         method.setAccessible(true);
         method.invoke(entity);
     }
