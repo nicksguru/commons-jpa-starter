@@ -27,9 +27,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.LinkedHashSet;
-import java.util.Objects;
 import java.util.SequencedSet;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -97,10 +100,17 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
     private static final int ESTIMATED_FTS_AWARE_FIELD_LENGTH = 50;
 
     /**
+     * UTF-8 bytes of the single-space separator inserted between kept supplier values, cached to avoid re-encoding it
+     * per value while streaming the checksum.
+     */
+    private static final byte[] FTS_VALUE_SEPARATOR_BYTES = " ".getBytes(StandardCharsets.UTF_8);
+
+    /**
      * Assigned by {@link #rebuildFullTextSearchNgrams()} and stored in DB to avoid costly ngram recalculation if the
      * search content has not changed.
      */
     @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     @Basic // formally optional (applied by default), but QueryDSL doesn't see this property without this annotation
     private String fullTextSearchDataChecksum;
 
@@ -172,6 +182,35 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
     }
 
     /**
+     * Creates a fresh SHA-256 digest - the same algorithm {@link ChecksumUtils#computeJsonChecksum(Object)} uses.
+     *
+     * @return new digest instance (not thread-safe, never shared)
+     * @throws IllegalStateException SHA-256 is unavailable (impossible on a compliant JVM)
+     */
+    @Nonnull
+    private static MessageDigest newSha256Digest() {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        }
+        // every Java platform implementation is required to support SHA-256 - unreachable
+        catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 algorithm not available", e);
+        }
+    }
+
+    /**
+     * Completes the streaming checksum in exactly the format {@link ChecksumUtils#computeJsonChecksum(Object)}
+     * produces: basic (non-MIME, non-url-safe) Base64 with padding and no line wrapping.
+     *
+     * @param digest digest fed with the content bytes
+     * @return Base64-encoded checksum
+     */
+    @Nonnull
+    private static String encodeChecksum(MessageDigest digest) {
+        return Base64.getEncoder().encodeToString(digest.digest());
+    }
+
+    /**
      * Assigned automatically during each insert/update using data from {@link #getFullTextSearchDataSuppliers()}.
      * <p>
      * WARNING: this field is only updated when using JPA to save documents. A rough estimate is that 100 words yield
@@ -226,14 +265,17 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
      * Called by Hibernate when it has decided to insert a new entity in DB or update an existing one (i.e. some
      * persistent properties have changed in memory). Assigns {@link #getFullTextSearchData()} and
      * {@link #getFullTextSearchDataChecksum()} using {@link #getFullTextSearchDataSuppliers()} and {@link NgramUtils}.
+     * <p>
+     * The checksum is streamed while the supplier values are being collected, so on the common unchanged-content path
+     * neither the joined text nor its byte representation is ever materialized.
      */
     @PrePersist
     @PreUpdate
     @SuppressWarnings("JpaEntityListenerInspection") // it's OK to have the same callback in parent class
     public void rebuildFullTextSearchNgrams() {
         // compute checksum of raw text, not of ngrams (the point is to avoid calculating ngrams for unchanged text)
-        String ftsText = callFullTextSearchDataSuppliers();
-        String newChecksum = ChecksumUtils.computeJsonChecksum(ftsText);
+        FullTextSearchData ftsData = callFullTextSearchDataSuppliers();
+        String newChecksum = ftsData.checksum();
 
         // ignore blank checksum - this should never happen, but just to prevent the app from crashing in case of a bug
         if (StringUtils.isBlank(newChecksum)) {
@@ -250,8 +292,11 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
             return;
         }
 
+        // content has changed - only now pay for materializing the joined text
+        String ftsText = ftsData.builder().toString();
         var builder = new StringBuilder(ESTIMATED_FTS_BUILDER_CAPACITY);
         var ftsChunks = createFullTextSearchChunks(ftsText, getNgramUtilsConfig());
+
         // stop appending chunks as soon as the limit is reached
         ftsChunks.stream()
                 .takeWhile(chunk -> {
@@ -277,35 +322,74 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
         }
     }
 
+    /**
+     * Collects full-text search data from {@link #getFullTextSearchDataSuppliers()} in a single pass, appending each
+     * kept value to a builder (needed only when the content has changed) while feeding an SHA-256 digest with exactly
+     * the bytes the joined text would produce: UTF-8 bytes of each value plus a single-space separator between values
+     * ({@code null} suppliers and blank values are skipped, an empty suppliers collection yields the digest of zero
+     * bytes).
+     * <p>
+     * The resulting checksum is therefore byte-identical to
+     * {@link ChecksumUtils#computeJsonChecksum(Object) ChecksumUtils.computeJsonChecksum(joinedText)}, which avoids a
+     * one-time rebuild of existing DB rows.
+     *
+     * @return collected search data: the accumulated builder plus the streaming checksum of the same content
+     */
     @Nonnull
-    private String callFullTextSearchDataSuppliers() {
+    private FullTextSearchData callFullTextSearchDataSuppliers() {
         Collection<Supplier<String>> suppliers = getFullTextSearchDataSuppliers();
+        var digest = newSha256Digest();
 
+        // no suppliers - digest of zero bytes, matching the checksum of an empty text
         if (CollectionUtils.isEmpty(suppliers)) {
-            return "";
+            return new FullTextSearchData(new StringBuilder(0), encodeChecksum(digest));
         }
 
         // estimate initial capacity based on field count and average field length
         int estimatedCapacity = Math.max(
                 ESTIMATED_FTS_BUILDER_CAPACITY,
                 suppliers.size() * ESTIMATED_FTS_AWARE_FIELD_LENGTH);
-        var builder = new StringBuilder(estimatedCapacity);
+        var sb = new StringBuilder(estimatedCapacity);
 
-        // do not process each field individually - let the ngram creator detect unique words
-        suppliers.stream()
-                .filter(Objects::nonNull)
-                .map(Supplier::get)
-                .filter(StringUtils::isNotBlank)
-                // this is more memory-effective than 'Collectors.joining(" ")' for large texts
-                .forEach(str -> {
-                    if (!builder.isEmpty()) {
-                        builder.append(" ");
-                    }
+        // do not process each field individually - let the ngram creator detect unique words;
+        // this is more memory-effective than 'Collectors.joining(" ")' for large texts
+        for (Supplier<String> supplier : suppliers) {
+            if (supplier == null) {
+                continue;
+            }
 
-                    builder.append(str);
-                });
+            String value = supplier.get();
 
-        return builder.toString();
+            if (StringUtils.isBlank(value)) {
+                continue;
+            }
+
+            if (!sb.isEmpty()) {
+                sb.append(" ");
+                digest.update(FTS_VALUE_SEPARATOR_BYTES);
+            }
+
+            sb.append(value);
+            digest.update(value.getBytes(StandardCharsets.UTF_8));
+        }
+
+        return new FullTextSearchData(sb, encodeChecksum(digest));
+    }
+
+    /**
+     * Single-pass collection result: the accumulated builder of the joined search text plus the streaming checksum of
+     * the exact bytes that text would produce. The builder is materialized (via {@code toString()}) only when the
+     * content has changed, keeping the common unchanged-content path free of full-text copies.
+     *
+     * @param builder  joined search text (kept values separated by a single space, {@code null} suppliers and blank
+     *                 values skipped)
+     * @param checksum Base64 SHA-256 checksum of the joined text bytes, identical to
+     *                 {@link ChecksumUtils#computeJsonChecksum(Object)} of the materialized text
+     */
+    private record FullTextSearchData(
+
+            StringBuilder builder,
+            String checksum) {
     }
 
 }
