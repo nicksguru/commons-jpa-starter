@@ -10,7 +10,6 @@ import guru.nicks.commons.jpa.it.repo.TestAuthorRepository;
 import guru.nicks.commons.jpa.it.repo.TestDocumentRepository;
 import guru.nicks.commons.jpa.repository.EnhancedJpaRepositoryFragment;
 
-import io.cucumber.java.Before;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
@@ -18,7 +17,6 @@ import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.LazyInitializationException;
 import org.springframework.data.domain.Sort;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
@@ -47,12 +45,11 @@ public class EnhancedJpaRepositoryFragmentSteps {
     private final EntityManager entityManager;
 
     // DI
-    private final PlatformTransactionManager transactionManager;
+    private final TransactionTemplate transactionTemplate;
 
     // DI
     private final TextWorld textWorld;
 
-    private TransactionTemplate transactionTemplate;
     private TestAuthor lastAuthor;
     private List<String> newDocumentIds;
     private String newDocumentUserId;
@@ -64,18 +61,6 @@ public class EnhancedJpaRepositoryFragmentSteps {
     private TestDocument fetchedWithGraph;
     private TestDocument lazyDocument;
     private String lastSavedAuthorId;
-
-    /**
-     * Replicates the JUnit {@code @BeforeEach} cleanup: every scenario starts with empty tables.
-     */
-    @Before
-    public void beforeEachScenario() {
-        transactionTemplate = new TransactionTemplate(transactionManager);
-        transactionTemplate.executeWithoutResult(tx -> {
-            documentRepository.deleteAllInBatch();
-            authorRepository.deleteAllInBatch();
-        });
-    }
 
     /**
      * Verifies fragment metadata inference from repository generics.
@@ -434,6 +419,7 @@ public class EnhancedJpaRepositoryFragmentSteps {
     @Then("the found document IDs should be {string}")
     public void theFoundDocumentIdsShouldBe(String ids) {
         assertThat(foundDocuments)
+                .as("found document IDs")
                 .extracting(TestDocument::getId)
                 .containsExactly(ids.split(","));
     }

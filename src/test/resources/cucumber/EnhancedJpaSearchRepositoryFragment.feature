@@ -11,26 +11,26 @@ Feature: EnhancedJpaSearchRepositoryFragment functionality
     And the total pages should be 2
     And the page content names should be "Alpha red document"
     When documents are searched with a filter for name "document" and user "user-1" requesting page 2 of size 1 sorted by name
-    And the page content names should be "Beta blue document"
+    Then the page content names should be "Beta blue document"
 
   Scenario: findByFilter without conditions returns everything
     Given the default documents exist
     When documents are searched with a null filter
     Then the total elements should be 3
     When documents are searched with an empty filter
-    And the total elements should be 3
+    Then the total elements should be 3
 
   Scenario: andIfNotNull adds the condition only for non-null values
     When andIfNotNull is invoked with a null value
     Then the condition should not be evaluated and the builder should stay empty
     When andIfNotNull is invoked with a present value
-    And the condition should be evaluated and the builder should have a value
+    Then the condition should be evaluated and the builder should have a value
 
   Scenario: andIfNotBlank adds the condition only for non-blank values
     When andIfNotBlank is invoked with a blank value
     Then the condition should not be evaluated and the builder should stay empty
     When andIfNotBlank is invoked with a non-blank value
-    And the condition should be evaluated and the builder should have a value
+    Then the condition should be evaluated and the builder should have a value
 
   Scenario: createJsonContainsPredicate filters by the JSON value
     Given the default documents exist
@@ -58,4 +58,4 @@ Feature: EnhancedJpaSearchRepositoryFragment functionality
     When documents are searched with a null full-text search
     Then the total elements should be 3
     When documents are searched with a blank full-text search
-    And the total elements should be 3
+    Then the total elements should be 3

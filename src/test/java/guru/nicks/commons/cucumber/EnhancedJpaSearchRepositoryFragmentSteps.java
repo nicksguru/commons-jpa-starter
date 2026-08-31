@@ -9,7 +9,6 @@ import guru.nicks.commons.jpa.it.repo.TestDocumentRepository;
 
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.Predicate;
-import io.cucumber.java.Before;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
@@ -17,7 +16,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
@@ -41,28 +39,15 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
     private final TestAuthorRepository authorRepository;
 
     // DI
-    private final PlatformTransactionManager transactionManager;
+    private final TransactionTemplate transactionTemplate;
 
     // DI
     private final TextWorld textWorld;
 
-    private TransactionTemplate transactionTemplate;
     private Page<TestDocument> resultPage;
     private Predicate jsonPredicate;
     private BooleanBuilder builder;
     private AtomicBoolean conditionInvoked;
-
-    /**
-     * Replicates the JUnit {@code @BeforeEach} cleanup: every scenario starts with empty tables.
-     */
-    @Before
-    public void beforeEachScenario() {
-        transactionTemplate = new TransactionTemplate(transactionManager);
-        transactionTemplate.executeWithoutResult(tx -> {
-            documentRepository.deleteAllInBatch();
-            authorRepository.deleteAllInBatch();
-        });
-    }
 
     /**
      * Persists the default document set: three documents spread over two authors and users, with JSON metadata.
@@ -158,7 +143,9 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
      */
     @Then("the total elements should be {int}")
     public void theTotalElementsShouldBe(int expected) {
-        assertThat(resultPage.getTotalElements()).isEqualTo(expected);
+        assertThat(resultPage.getTotalElements())
+                .as("total elements")
+                .isEqualTo(expected);
     }
 
     /**
@@ -168,7 +155,9 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
      */
     @Then("the total pages should be {int}")
     public void theTotalPagesShouldBe(int expected) {
-        assertThat(resultPage.getTotalPages()).isEqualTo(expected);
+        assertThat(resultPage.getTotalPages())
+                .as("total pages")
+                .isEqualTo(expected);
     }
 
     /**

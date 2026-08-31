@@ -499,7 +499,7 @@ public class FullTextSearchAwareEntitySteps {
         };
     }
 
-    // Helper method to call the private assignFullTextSearchData method using reflection
+    // invokes the public rebuildFullTextSearchNgrams method directly
     @SneakyThrows
     private void callAssignFullTextSearchData(TestEntity entity) {
         Method method = FullTextSearchAwareEntity.class.getDeclaredMethod("rebuildFullTextSearchNgrams");
