@@ -1,7 +1,9 @@
 package guru.nicks.commons.cucumber;
 
+import guru.nicks.commons.cucumber.domain.ConfigurableTestEntity;
 import guru.nicks.commons.cucumber.domain.TestEntity;
 import guru.nicks.commons.jpa.domain.FullTextSearchAwareEntity;
+import guru.nicks.commons.utils.crypto.ChecksumUtils;
 import guru.nicks.commons.utils.text.NgramUtils;
 
 import io.cucumber.datatable.DataTable;
@@ -21,10 +23,17 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 import java.util.SequencedSet;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class FullTextSearchAwareEntitySteps {
+
+    /**
+     * ~12 KB of mixed Cyrillic and ASCII, exercising multibyte UTF-8 encoding in the streaming checksum.
+     */
+    private static final String LARGE_TEXT = "слово word content ".repeat(600);
 
     private TestEntity entity;
     private TestSearchFilter searchFilter;
@@ -34,6 +43,11 @@ public class FullTextSearchAwareEntitySteps {
 
     private String previousFullTextSearchData;
     private String previousChecksum;
+
+    // entity with a mutable supplier list, accepting null suppliers - the fixed TestEntity cannot express that
+    private ConfigurableTestEntity configurableEntity;
+    private AtomicReference<String> mutableSupplierValue;
+
     private long operationStartTime;
     private long operationEndTime;
     private SequencedSet<String> createdChunks;
@@ -197,7 +211,7 @@ public class FullTextSearchAwareEntitySteps {
 
     @Then("the search data checksum should remain unchanged")
     public void theSearchDataChecksumShouldRemainUnchanged() {
-        assertThat(entity.getFullTextSearchDataChecksum())
+        assertThat(activeEntity().getFullTextSearchDataChecksum())
                 .as("Search data checksum should remain unchanged")
                 .isEqualTo(previousChecksum);
     }
@@ -315,6 +329,174 @@ public class FullTextSearchAwareEntitySteps {
                     .as("Chunk should not contain semicolon: " + chunk)
                     .doesNotContain(";");
         }
+    }
+
+    /**
+     * Creates a configurable entity from a semicolon-separated list of supplier tokens: {@code none} yields an empty
+     * suppliers collection, {@code null} a null supplier entry, {@code null-value} a supplier returning null,
+     * {@code blank} an empty string, {@code space}/{@code tab}/{@code newline} whitespace-only values and
+     * {@code large-text} the ~12 KB mixed-script text; anything else is the literal value.
+     *
+     * @param suppliersSpec semicolon-separated supplier tokens
+     */
+    @Given("a configurable test entity with search data suppliers {string}")
+    public void aConfigurableTestEntityWithSearchDataSuppliers(String suppliersSpec) {
+        configurableEntity = new ConfigurableTestEntity();
+
+        // 'none' means an empty suppliers collection
+        if (!"none".equals(suppliersSpec)) {
+            for (String token : suppliersSpec.split(";")) {
+                configurableEntity.addSupplier(tokenToSupplier(token));
+            }
+        }
+    }
+
+    /**
+     * Creates a configurable entity whose single supplier reads from a mutable reference, so later steps can change the
+     * supplied content without touching the supplier list.
+     *
+     * @param initialValue text the supplier returns initially
+     */
+    @Given("a configurable test entity with a mutable search data supplier initially returning {string}")
+    public void aConfigurableTestEntityWithAMutableSearchDataSupplierInitiallyReturning(String initialValue) {
+        configurableEntity = new ConfigurableTestEntity();
+        mutableSupplierValue = new AtomicReference<>(initialValue);
+        configurableEntity.addSupplier(mutableSupplierValue::get);
+    }
+
+    /**
+     * Rebuilds the ngrams of the configurable entity directly ({@code rebuildFullTextSearchNgrams()} is public) while
+     * remembering the previous data and checksum, so 'remain unchanged'-style steps can reference them.
+     */
+    @When("the configurable entity rebuilds its full-text search ngrams")
+    public void theConfigurableEntityRebuildsItsFullTextSearchNgrams() {
+        previousFullTextSearchData = configurableEntity.getFullTextSearchData();
+        previousChecksum = configurableEntity.getFullTextSearchDataChecksum();
+
+        configurableEntity.rebuildFullTextSearchNgrams();
+    }
+
+    /**
+     * Changes the text returned by the mutable supplier.
+     *
+     * @param newValue text the supplier returns from now on
+     */
+    @When("the mutable search data supplier is changed to return {string}")
+    public void theMutableSearchDataSupplierIsChangedToReturn(String newValue) {
+        mutableSupplierValue.set(newValue);
+    }
+
+    /**
+     * Injects a sentinel into the search data field directly, bypassing the rebuild pipeline.
+     *
+     * @param sentinel value to inject manually
+     */
+    @When("the full-text search data is manually set to {string}")
+    public void theFullTextSearchDataIsManuallySetTo(String sentinel) {
+        configurableEntity.setFullTextSearchData(sentinel);
+    }
+
+    /**
+     * Verifies that the rebuild produced non-blank search data.
+     */
+    @Then("the rebuilt full-text search data should not be blank")
+    public void theRebuiltFullTextSearchDataShouldNotBeBlank() {
+        assertThat(configurableEntity.getFullTextSearchData())
+                .as("Rebuilt full-text search data")
+                .isNotBlank();
+    }
+
+    /**
+     * Verifies that the manually injected sentinel survived a rebuild, proving the ngram pipeline was skipped.
+     *
+     * @param sentinel value injected earlier via the manual setter
+     */
+    @Then("the full-text search data should remain {string}")
+    public void theFullTextSearchDataShouldRemain(String sentinel) {
+        assertThat(configurableEntity.getFullTextSearchData())
+                .as("Full-text search data must survive the rebuild untouched because the pipeline was skipped")
+                .isEqualTo(sentinel);
+    }
+
+    /**
+     * Verifies that the search data differs from the one captured before the latest rebuild.
+     */
+    @Then("the full-text search data should be regenerated on the configurable entity")
+    public void theFullTextSearchDataShouldBeRegeneratedOnTheConfigurableEntity() {
+        assertThat(configurableEntity.getFullTextSearchData())
+                .as("Full-text search data should be different after content change")
+                .isNotEqualTo(previousFullTextSearchData);
+    }
+
+    /**
+     * Verifies that the streaming checksum stored by the rebuild equals
+     * {@link ChecksumUtils#computeJsonChecksum(Object)} of the joined supplier text.
+     *
+     * @param joinedText joined text the old non-streaming implementation would hash, or the {@code empty}/
+     *                   {@code large-text} token
+     */
+    @Then("the search data checksum should equal the checksum of {string}")
+    public void theSearchDataChecksumShouldEqualTheChecksumOf(String joinedText) {
+        assertThat(configurableEntity.getFullTextSearchDataChecksum())
+                .as("Streaming checksum must be byte-identical to computeJsonChecksum of the joined text")
+                .isEqualTo(ChecksumUtils.computeJsonChecksum(expandTextToken(joinedText)));
+    }
+
+    /**
+     * Verifies that the streaming checksum stored by the rebuild differs from
+     * {@link ChecksumUtils#computeJsonChecksum(Object)} of the given text.
+     *
+     * @param joinedText text whose checksum must not match, or the {@code empty}/{@code large-text} token
+     */
+    @Then("the search data checksum should not equal the checksum of {string}")
+    public void theSearchDataChecksumShouldNotEqualTheChecksumOf(String joinedText) {
+        assertThat(configurableEntity.getFullTextSearchDataChecksum())
+                .as("Streaming checksum must differ from computeJsonChecksum of '%s'", joinedText)
+                .isNotEqualTo(ChecksumUtils.computeJsonChecksum(expandTextToken(joinedText)));
+    }
+
+    /**
+     * Returns the entity the current scenario operates on: the configurable one when present, the plain test entity
+     * otherwise (a scenario never uses both).
+     *
+     * @return entity active in the current scenario
+     */
+    private FullTextSearchAwareEntity<String> activeEntity() {
+        return configurableEntity != null ? configurableEntity : entity;
+    }
+
+    /**
+     * Maps a supplier token to a supplier.
+     *
+     * @param token token from the feature file
+     * @return supplier for the token, may be {@code null} (a null supplier entry)
+     */
+    private Supplier<String> tokenToSupplier(String token) {
+        return switch (token) {
+            case "null" -> null;
+            case "null-value" -> () -> null;
+            case "blank" -> () -> "";
+            case "space" -> () -> " ";
+            case "tab" -> () -> "\t";
+            case "newline" -> () -> "\n\r";
+            case "large-text" -> () -> LARGE_TEXT;
+            default -> () -> token;
+        };
+    }
+
+    /**
+     * Expands a joined-text token: {@code empty} yields an empty string and {@code large-text} the ~12 KB mixed-script
+     * text; anything else is the literal text.
+     *
+     * @param token token from the feature file
+     * @return expanded text
+     */
+    private String expandTextToken(String token) {
+        return switch (token) {
+            case "empty" -> "";
+            case "large-text" -> LARGE_TEXT;
+            default -> token;
+        };
     }
 
     // Helper method to call the private assignFullTextSearchData method using reflection

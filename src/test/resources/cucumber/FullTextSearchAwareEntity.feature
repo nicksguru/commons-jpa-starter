@@ -143,3 +143,51 @@ Feature: FullTextSearchAwareEntity functionality
       | one,two,three,four                                  | one two three four                                       |
       | 'quoted text' another                               | ano anot anoth anothe quo quot quote quoted tex text ext |
       | (parentheses) [brackets] {braces}                   | bra brac brace braces brack bracke par pare paren parent |
+
+  # Supplier tokens:
+  #   'none'        - empty suppliers collection
+  #   'null'        - null supplier entry
+  #   'null-value'  - supplier returning null
+  #   'blank'       - empty string
+  #   'space'/'tab'/'newline' - whitespace-only values
+  #   'large-text'  - ~12 KB of mixed Cyrillic and ASCII
+  # Joined-text tokens:
+  #   'empty'       - empty string
+  #   'large-text'
+  Scenario Outline: Streaming checksum is byte-identical to computeJsonChecksum of the joined supplier text
+    Given a configurable test entity with search data suppliers "<suppliers>"
+    When the configurable entity rebuilds its full-text search ngrams
+    Then the search data checksum should equal the checksum of "<joinedText>"
+    Examples:
+      | caseName                     | suppliers                        | joinedText            |
+      | no suppliers                 | none                             | empty                 |
+      | null suppliers only          | null;null                        | empty                 |
+      | null and blank values        | null-value;blank                 | empty                 |
+      | whitespace-only values       | space;tab;newline                | empty                 |
+      | single value                 | hello                            | hello                 |
+      | nulls and blanks interleaved | alpha;null;space;beta;null-value | alpha beta            |
+      | blanks interleaved           | blank;one;space;two;null;three   | one two three         |
+      | values with inner spaces     | two words;more words             | two words more words  |
+      | cyrillic values              | Привет;мир                       | Привет мир            |
+      | umlaut values                | Übergrößen;ändern;ÄÖÜ            | Übergrößen ändern ÄÖÜ |
+      | cyrillic and umlauts mixed   | ё;null;Üü;space                  | ё Üü                  |
+      | large mixed-script text      | large-text                       | large-text            |
+
+  Scenario: Unchanged content skips the ngram rebuild
+    Given a configurable test entity with search data suppliers "initial search content"
+    When the configurable entity rebuilds its full-text search ngrams
+    Then the rebuilt full-text search data should not be blank
+    When the full-text search data is manually set to "sentinel-not-rebuilt"
+    And the configurable entity rebuilds its full-text search ngrams
+    Then the full-text search data should remain "sentinel-not-rebuilt"
+    And the search data checksum should remain unchanged
+
+  Scenario: Changed content rebuilds the ngrams and stores the new streaming checksum
+    Given a configurable test entity with a mutable search data supplier initially returning "initial search content"
+    When the configurable entity rebuilds its full-text search ngrams
+    Then the rebuilt full-text search data should not be blank
+    When the mutable search data supplier is changed to return "updated search content"
+    And the configurable entity rebuilds its full-text search ngrams
+    Then the full-text search data should be regenerated on the configurable entity
+    And the search data checksum should not equal the checksum of "initial search content"
+    And the search data checksum should equal the checksum of "updated search content"
