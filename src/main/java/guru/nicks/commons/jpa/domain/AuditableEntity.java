@@ -9,6 +9,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Transient;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.FieldNameConstants;
@@ -31,8 +32,6 @@ import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
-import static guru.nicks.commons.validation.dsl.ValiDsl.checkNotNull;
-
 /**
  * JPA entity that keeps track of who and when created/modified it. In Postgres, timestamps have a
  * <a href="https://www.postgresql.org/docs/current/datatype-datetime.html">microsecond precision</a>, which makes
@@ -42,10 +41,14 @@ import static guru.nicks.commons.validation.dsl.ValiDsl.checkNotNull;
  * This class doesn't keep the full update history (for that, use Hibernate Envers), merely the creation and last update
  * info. Works on the Hibernate level, doesn't need {@link EnableJpaAuditing @EnableJpaAuditing} (the latter works
  * incorrectly with Hibernate 6 - see comments on individual properties for details).
+ * <p>
+ * WARNING: this class has {@link Data @Data} annotation, which is not recommended for use with JPA entities (better
+ * compare by primary key and avoid unrolling the relationship graph), but is present in most projects by default, so
+ * it's left here for convenience. Fields to be excluded are to be marked <b>both</b> with
+ * {@link ToString.Exclude @ToString.Exclude} <b>and</b> {@link EqualsAndHashCode.Exclude @EqualsAndHashCode.Exclude},
  */
 @MappedSuperclass
 @NoArgsConstructor
-// equals+hashCode are required for addToCollectionIfNotAlreadyThere method
 @Data
 // for entity graphs
 @FieldNameConstants
@@ -57,6 +60,7 @@ public abstract class AuditableEntity<ID> implements Persistable<ID>, Serializab
      * If non-null, overrides default {@link #isNew()} behavior (checking for non-null {@link #getId()}).
      */
     @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     @Transient
     private Boolean isNew;
 
@@ -168,43 +172,39 @@ public abstract class AuditableEntity<ID> implements Persistable<ID>, Serializab
     }
 
     /**
-     * Adds the entity to the collection. This is a convenience method to avoid NPE on collections and to set
-     * bidirectional links transparently (only if the addition actually took place).
+     * Adds the entity to the collection. This is a convenience method to set bidirectional links transparently (only if
+     * the addition actually took place). If the collection is assumed to filter out duplicates based on field values
+     * (not object references), the collection item must support {@link Object#equals(Object)}.
      * <p>
-     * WARNING: this method is not thread-safe because the underlying collection is not either.
+     * WARNING: callers are advised to initialize a null collection and invoke this method from within a synchronized
+     * block.
      *
-     * @param collection              collection to add to; if {@code null}, nothing happens
-     * @param collectionItem          item to add to the collection; if {@code null} or already there (as per
-     *                                {@link Object#equals(Object)}), nothing happens
+     * @param collection              collection to add to
+     * @param collectionItem          item to add to the collection
      * @param bidirectionalLinkSetter setter to call on {@code collectionItem} to set {@code E} to {@code this}
+     * @throws NullPointerException if {@code collection} or {@code bidirectionalLinkSetter} is {@code null}
      */
-    protected <E extends AuditableEntity<ID>, T> void addToCollectionIfNotAlreadyThere(Collection<T> collection,
+    protected <E extends AuditableEntity<ID>, T> void addToCollection(Collection<T> collection,
             T collectionItem, BiConsumer<T, E> bidirectionalLinkSetter) {
-        checkNotNull(collection, "collection");
-        checkNotNull(collectionItem, "collectionItem");
-
-        if (collection.isEmpty() || !collection.contains(collectionItem)) {
-            collection.add(collectionItem);
-            bidirectionalLinkSetter.accept(collectionItem, self());
-        }
+        collection.add(collectionItem);
+        bidirectionalLinkSetter.accept(collectionItem, self());
     }
 
     /**
-     * Removes the entity from the collection. This is a convenience method to avoid NPE on collections and to set
-     * bidirectional links transparently (only if the removal actually took place).
+     * Removes the entity from the collection. This is a convenience method to reset bidirectional links transparently
+     * (only if the removal actually took place).
      * <p>
-     * WARNING: this method is not thread-safe because the underlying collection is not either.
+     * WARNING: callers are advised to ensure thread safety via e.g. {@code synchronized(this)}.
      *
      * @param collection              collection to remove from; if {@code null}, nothing happens
-     * @param collectionItem          item to remove from the collection (as per {@link Object#equals(Object)}); if
-     *                                {@code null}, nothing happens
+     * @param collectionItem          item to remove from the collection (as per {@link Object#equals(Object)} which
+     *                                compares object references by default)
      * @param bidirectionalLinkSetter setter to call on {@code collectionItem} to set {@code E} to {@code null}
+     * @throws NullPointerException if {@code bidirectionalLinkSetter} is {@code null} (only if invoked)
      */
-    protected <E extends AuditableEntity<ID>, T> void removeFromCollectionIfNotNull(Collection<T> collection,
+    protected <E extends AuditableEntity<ID>, T> void removeFromCollection(Collection<T> collection,
             T collectionItem, BiConsumer<T, E> bidirectionalLinkSetter) {
-        checkNotNull(bidirectionalLinkSetter, "bidirectionalLinkSetter");
-
-        if ((collection == null) || (collectionItem == null)) {
+        if (collection == null) {
             return;
         }
 
