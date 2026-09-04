@@ -14,9 +14,10 @@ import jakarta.persistence.MappedSuperclass;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Transient;
-import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import lombok.ToString;
 import lombok.experimental.FieldNameConstants;
 import lombok.experimental.SuperBuilder;
@@ -68,10 +69,12 @@ import static guru.nicks.commons.validation.dsl.ValiDsl.checkNotNull;
  * @see #getFullTextSearchDataSuppliers()
  */
 @MappedSuperclass
+//
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
 @ToString(callSuper = true)
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 // for entity graphs
 @FieldNameConstants
 @SuperBuilder
@@ -112,7 +115,6 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
      * search content has not changed.
      */
     @ToString.Exclude
-    @EqualsAndHashCode.Exclude
     @Basic // formally optional (applied by default), but QueryDSL doesn't see this property without this annotation
     private String fullTextSearchDataChecksum;
 

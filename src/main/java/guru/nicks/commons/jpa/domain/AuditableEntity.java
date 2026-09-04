@@ -8,9 +8,10 @@ import jakarta.persistence.MappedSuperclass;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Transient;
-import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import lombok.ToString;
 import lombok.experimental.FieldNameConstants;
 import lombok.experimental.SuperBuilder;
@@ -42,14 +43,18 @@ import java.util.function.Consumer;
  * info. Works on the Hibernate level, doesn't need {@link EnableJpaAuditing @EnableJpaAuditing} (the latter works
  * incorrectly with Hibernate 6 - see comments on individual properties for details).
  * <p>
- * WARNING: this class has {@link Data @Data} annotation, which is not recommended for use with JPA entities (better
- * compare by primary key and avoid unrolling the relationship graph), but is present in most projects by default, so
- * it's left here for convenience. Fields to be excluded are to be marked <b>both</b> with
- * {@link ToString.Exclude @ToString.Exclude} <b>and</b> {@link EqualsAndHashCode.Exclude @EqualsAndHashCode.Exclude},
+ * NOTE: this class has {@link ToString @ToString} which is not recommended (it unrolls JPA relationship graphs), but
+ * is commonly used for debugging, therefore retained as a common default. It also has
+ * {@link EqualsAndHashCode @EqualsAndHashCode} with 'onlyExplicitlyIncluded=true', which suggests
+ * that subclasses should only annotate the primary key as {@link EqualsAndHashCode.Include @EqualsAndHashCode.Include},
  */
 @MappedSuperclass
+//
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
+@ToString
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 // for entity graphs
 @FieldNameConstants
 @SuperBuilder
@@ -60,7 +65,6 @@ public abstract class AuditableEntity<ID> implements Persistable<ID>, Serializab
      * If non-null, overrides default {@link #isNew()} behavior (checking for non-null {@link #getId()}).
      */
     @ToString.Exclude
-    @EqualsAndHashCode.Exclude
     @Transient
     private Boolean isNew;
 
@@ -175,9 +179,6 @@ public abstract class AuditableEntity<ID> implements Persistable<ID>, Serializab
      * Adds the entity to the collection. This is a convenience method to set bidirectional links transparently (only if
      * the addition actually took place). If the collection is assumed to filter out duplicates based on field values
      * (not object references), the collection item must support {@link Object#equals(Object)}.
-     * <p>
-     * WARNING: callers are advised to initialize a null collection and invoke this method from within a synchronized
-     * block.
      *
      * @param collection              collection to add to
      * @param collectionItem          item to add to the collection
@@ -193,8 +194,6 @@ public abstract class AuditableEntity<ID> implements Persistable<ID>, Serializab
     /**
      * Removes the entity from the collection. This is a convenience method to reset bidirectional links transparently
      * (only if the removal actually took place).
-     * <p>
-     * WARNING: callers are advised to ensure thread safety via e.g. {@code synchronized(this)}.
      *
      * @param collection              collection to remove from; if {@code null}, nothing happens
      * @param collectionItem          item to remove from the collection (as per {@link Object#equals(Object)} which
