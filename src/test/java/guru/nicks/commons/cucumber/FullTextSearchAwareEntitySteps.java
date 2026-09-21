@@ -11,7 +11,6 @@ import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import lombok.Builder;
-import lombok.SneakyThrows;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.PageRequest;
@@ -19,7 +18,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 import java.util.SequencedSet;
@@ -456,6 +454,30 @@ public class FullTextSearchAwareEntitySteps {
     }
 
     /**
+     * Runs the {@code @PrePersist}/{@code @PreUpdate} callback wrapper on the configurable entity directly, while
+     * remembering the previous data and checksum, so 'remain unchanged'-style steps can reference them.
+     */
+    @When("the JPA callback runs on the configurable entity")
+    public void theJpaCallbackRunsOnTheConfigurableEntity() {
+        previousFullTextSearchData = configurableEntity.getFullTextSearchData();
+        previousChecksum = configurableEntity.getFullTextSearchDataChecksum();
+
+        callJpaCallback(configurableEntity);
+    }
+
+    /**
+     * Verifies that the search data is no longer the given sentinel, proving the rebuild pipeline ran.
+     *
+     * @param sentinel value that must have been overwritten
+     */
+    @Then("the full-text search data should not remain {string}")
+    public void theFullTextSearchDataShouldNotRemain(String sentinel) {
+        assertThat(configurableEntity.getFullTextSearchData())
+                .as("Full-text search data must not remain the injected sentinel")
+                .isNotEqualTo(sentinel);
+    }
+
+    /**
      * Returns the entity the current scenario operates on: the configurable one when present, the plain test entity
      * otherwise (a scenario never uses both).
      *
@@ -499,12 +521,13 @@ public class FullTextSearchAwareEntitySteps {
         };
     }
 
-    // invokes the public rebuildFullTextSearchNgrams method directly
-    @SneakyThrows
     private void callAssignFullTextSearchData(TestEntity entity) {
-        Method method = FullTextSearchAwareEntity.class.getDeclaredMethod("rebuildFullTextSearchData");
-        method.setAccessible(true);
-        method.invoke(entity);
+        entity.rebuildFullTextSearchData();
+    }
+
+    // invokes the @PrePersist/@PreUpdate callback wrapper directly
+    private void callJpaCallback(FullTextSearchAwareEntity<String> entity) {
+        entity.rebuildFullTextSearchData();
     }
 
     /**

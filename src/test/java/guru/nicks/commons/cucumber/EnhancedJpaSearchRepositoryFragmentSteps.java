@@ -353,6 +353,7 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
     private void invokeAndIfNotNull(Supplier<String> valueSupplier) {
         builder = new BooleanBuilder();
         conditionInvoked = new AtomicBoolean(false);
+
         documentRepository.andIfNotNull(valueSupplier, builder, value -> {
             conditionInvoked.set(true);
             return TestDocumentRepository.DOCUMENT_PATH.getString(TestDocument.Fields.name).eq(value);
@@ -367,6 +368,7 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
     private void invokeAndIfNotBlank(Supplier<String> valueSupplier) {
         builder = new BooleanBuilder();
         conditionInvoked = new AtomicBoolean(false);
+
         documentRepository.andIfNotBlank(valueSupplier, builder, value -> {
             conditionInvoked.set(true);
             return TestDocumentRepository.DOCUMENT_PATH.getString(TestDocument.Fields.name).eq(value);

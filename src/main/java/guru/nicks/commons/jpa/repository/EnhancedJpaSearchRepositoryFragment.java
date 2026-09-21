@@ -12,7 +12,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Persistable;
 import org.springframework.data.repository.NoRepositoryBean;
-import org.springframework.data.repository.core.RepositoryMetadata;
 
 import java.io.Serializable;
 import java.util.Optional;
@@ -22,8 +21,8 @@ import java.util.function.Supplier;
 
 /**
  * Search-related custom functionality contributed to {@link EnhancedJpaSearchRepository} as a repository fragment.
- * Implemented in {@link EnhancedJpaSearchRepositoryFragmentImpl} which is attached to repository proxies via
- * {@link EnhancedJpaRepositoryFactory#getRepositoryFragments(RepositoryMetadata)}.
+ * Implemented in {@link EnhancedJpaSearchRepositoryFragmentImpl} which is attached to repository proxies by
+ * {@link EnhancedJpaRepositoryFactory}.
  * <p>
  * NOTE: deliberately extends nothing - only then does Spring Data treat this interface as a fragment and not as a
  * repository. Fragment discovery through {@link EnhancedJpaSearchRepository} is transitive, so user repositories

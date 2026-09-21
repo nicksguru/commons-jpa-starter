@@ -43,6 +43,7 @@ import java.io.Serializable;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.SequencedSet;
@@ -203,12 +204,7 @@ public class EnhancedJpaSearchRepositoryFragmentImpl<T extends Persistable<ID>,
     @Transactional
     @Override
     public long rebuildFullTextSearchData() {
-        // a wrong domain type is a configuration error
-        if (!FullTextSearchAwareEntity.class.isAssignableFrom(getEntityClass())) {
-            throw new IllegalStateException("Entity class [" + getEntityClass().getName()
-                    + "] must extend [" + FullTextSearchAwareEntity.class.getName()
-                    + "] to support full-text search reindexing");
-        }
+        checkFullTextSearchCapable();
 
         // route reads/writes through the repository proxy to preserve transactions and user overrides
         EnhancedJpaSearchRepository<T, ID, E, F> repository = getOriginalRepositoryProxy();
@@ -222,29 +218,56 @@ public class EnhancedJpaSearchRepositoryFragmentImpl<T extends Persistable<ID>,
             page = repository.findAll(PageRequest.of(pageNumber, JpaConstants.INTERNAL_PAGE_SIZE,
                     Sort.by(Sort.Direction.ASC, idAttributeName)));
 
-            for (T entity : page) {
-                var ftsAwareEntity = (FullTextSearchAwareEntity<?>) entity;
-
-                // Invalidate the stored checksum first: a null checksum never equals the freshly computed one, so
-                // the rebuild below cannot short-circuit. This is what makes rows with stale ngrams but a
-                // still-matching raw-text checksum (e.g. after a lemmatization fix) get rebuilt.
-                ftsAwareEntity.setFullTextSearchDataChecksum(null);
-
-                // Run the rebuild explicitly. The @PreUpdate callback at flush time then cheaply short-circuits on
-                // the already-updated checksum instead of recomputing the ngrams a second time.
-                ftsAwareEntity.rebuildFullTextSearchData();
-            }
-
-            repository.saveAllAndFlush(page.getContent());
-            // release memory
-            getEntityManager().clear();
-
-            processedCount += page.getNumberOfElements();
+            processedCount += rebuildAndPersist(page.getContent(), repository);
             pageNumber++;
         } while (page.hasNext());
 
         log.info("Rebuilt FTS data of [{}]: {} entities processed", getEntityClass().getName(), processedCount);
         return processedCount;
+    }
+
+    /**
+     * Rebuilds the FTS data of the given (already loaded) entities and persists the batch: invalidates each stored
+     * checksum first so the explicit rebuild cannot short-circuit, then runs the rebuild, saves the batch and clears
+     * the persistence context to keep memory bounded.
+     *
+     * @param entities   entities to rebuild, loaded fresh from DB
+     * @param repository repository proxy to write through
+     * @return number of entities processed
+     */
+    private int rebuildAndPersist(List<T> entities, EnhancedJpaSearchRepository<T, ID, E, F> repository) {
+        for (T entity : entities) {
+            var ftsAwareEntity = (FullTextSearchAwareEntity<?>) entity;
+
+            // Invalidate the stored checksum first: a null checksum never equals the freshly computed one, so
+            // the rebuild below cannot short-circuit. This is what makes rows with stale ngrams but a
+            // still-matching raw-text checksum (e.g. after a lemmatization fix) get rebuilt.
+            ftsAwareEntity.setFullTextSearchDataChecksum(null);
+
+            // Run the rebuild explicitly. The @PreUpdate callback at flush time then cheaply short-circuits on
+            // the already-updated checksum instead of recomputing the ngrams a second time.
+            ftsAwareEntity.rebuildFullTextSearchData();
+        }
+
+        repository.saveAllAndFlush(entities);
+        // release memory
+        getEntityManager().clear();
+
+        return entities.size();
+    }
+
+    /**
+     * Fails fast when the repository's domain type cannot participate in full-text search reindexing.
+     *
+     * @throws IllegalStateException domain type does not extend {@link FullTextSearchAwareEntity}
+     */
+    private void checkFullTextSearchCapable() {
+        // a wrong domain type is a configuration error
+        if (!FullTextSearchAwareEntity.class.isAssignableFrom(getEntityClass())) {
+            throw new IllegalStateException("Entity class [" + getEntityClass().getName()
+                    + "] must extend [" + FullTextSearchAwareEntity.class.getName()
+                    + "] to support full-text search reindexing");
+        }
     }
 
     @SuppressWarnings("unchecked")
