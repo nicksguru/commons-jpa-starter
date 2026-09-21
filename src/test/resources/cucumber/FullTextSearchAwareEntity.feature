@@ -191,3 +191,12 @@ Feature: FullTextSearchAwareEntity functionality
     Then the full-text search data should be regenerated on the configurable entity
     And the search data checksum should not equal the checksum of "initial search content"
     And the search data checksum should equal the checksum of "updated search content"
+
+  Scenario: Enforced rebuild regenerates the ngrams despite an unchanged checksum
+    Given a configurable test entity with search data suppliers "initial search content"
+    When the configurable entity rebuilds its full-text search ngrams
+    Then the rebuilt full-text search data should not be blank
+    When the full-text search data is manually set to "sentinel-not-rebuilt"
+    And the configurable entity enforces a rebuild of its full-text search ngrams
+    Then the full-text search data should not remain "sentinel-not-rebuilt"
+    And the search data checksum should remain unchanged

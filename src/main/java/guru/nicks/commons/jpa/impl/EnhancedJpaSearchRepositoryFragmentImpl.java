@@ -6,6 +6,7 @@ import guru.nicks.commons.jpa.domain.JpaConstants;
 import guru.nicks.commons.jpa.repository.EnhancedJpaRepository;
 import guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepository;
 import guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepositoryFragment;
+import guru.nicks.commons.utils.text.FullTextSearchUtils;
 import guru.nicks.commons.utils.text.NgramUtilsConfig;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -24,6 +25,7 @@ import com.querydsl.core.types.dsl.StringTemplate;
 import com.querydsl.jpa.impl.JPAQuery;
 import jakarta.persistence.EntityGraph;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.metamodel.EntityType;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -215,7 +217,8 @@ public class EnhancedJpaSearchRepositoryFragmentImpl<T extends Persistable<ID>,
 
         do {
             // sort by ID for deterministic pagination: rows change between page fetches, IDs don't
-            page = repository.findAll(PageRequest.of(pageNumber, JpaConstants.INTERNAL_PAGE_SIZE,
+            page = repository.findAll(PageRequest.of(
+                    pageNumber, JpaConstants.INTERNAL_PAGE_SIZE,
                     Sort.by(Sort.Direction.ASC, idAttributeName)));
 
             processedCount += rebuildAndPersist(page.getContent(), repository);
@@ -227,9 +230,12 @@ public class EnhancedJpaSearchRepositoryFragmentImpl<T extends Persistable<ID>,
     }
 
     /**
-     * Rebuilds the FTS data of the given (already loaded) entities and persists the batch: invalidates each stored
-     * checksum first so the explicit rebuild cannot short-circuit, then runs the rebuild, saves the batch and clears
-     * the persistence context to keep memory bounded.
+     * Rebuilds the FTS data of the given (already loaded) entities and persists the batch: triggers an enforced
+     * rebuild, saves the batch and clears the persistence context to keep memory bounded.
+     * <p>
+     * Enforced rebuild ignores a still-matching checksum: rows with stale ngrams but an unchanged raw-text checksum
+     * (e.g. after a lemmatization fix) get rebuilt. The {@link PreUpdate @PreUpdate} callback at flush time then
+     * cheaply short-circuits on the already-updated checksum instead of recomputing the ngrams a second time.
      *
      * @param entities   entities to rebuild, loaded fresh from DB
      * @param repository repository proxy to write through
@@ -238,15 +244,7 @@ public class EnhancedJpaSearchRepositoryFragmentImpl<T extends Persistable<ID>,
     private int rebuildAndPersist(List<T> entities, EnhancedJpaSearchRepository<T, ID, E, F> repository) {
         for (T entity : entities) {
             var ftsAwareEntity = (FullTextSearchAwareEntity<?>) entity;
-
-            // Invalidate the stored checksum first: a null checksum never equals the freshly computed one, so
-            // the rebuild below cannot short-circuit. This is what makes rows with stale ngrams but a
-            // still-matching raw-text checksum (e.g. after a lemmatization fix) get rebuilt.
-            ftsAwareEntity.setFullTextSearchDataChecksum(null);
-
-            // Run the rebuild explicitly. The @PreUpdate callback at flush time then cheaply short-circuits on
-            // the already-updated checksum instead of recomputing the ngrams a second time.
-            ftsAwareEntity.rebuildFullTextSearchData();
+            ftsAwareEntity.rebuildFullTextSearchData(true);
         }
 
         repository.saveAllAndFlush(entities);
@@ -330,7 +328,7 @@ public class EnhancedJpaSearchRepositoryFragmentImpl<T extends Persistable<ID>,
                     + "] to support full-text search");
         }
 
-        SequencedSet<String> chunks = FullTextSearchAwareEntity.createFullTextSearchChunks(fts, getNgramUtilsConfig());
+        SequencedSet<String> chunks = FullTextSearchUtils.createFtsChunks(fts, getNgramUtilsConfig());
         String q = getSqlDialect().createLenientFullTextSearchCondition(chunks);
 
         // WARNING: don't pass '{0}' to booleanTemplate(), rather embed the value, or the query generated will have

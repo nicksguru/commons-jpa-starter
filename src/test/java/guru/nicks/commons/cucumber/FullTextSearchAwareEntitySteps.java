@@ -4,6 +4,7 @@ import guru.nicks.commons.cucumber.domain.ConfigurableTestEntity;
 import guru.nicks.commons.cucumber.domain.TestEntity;
 import guru.nicks.commons.jpa.domain.FullTextSearchAwareEntity;
 import guru.nicks.commons.utils.crypto.ChecksumUtils;
+import guru.nicks.commons.utils.text.FullTextSearchUtils;
 import guru.nicks.commons.utils.text.NgramUtils;
 
 import io.cucumber.datatable.DataTable;
@@ -285,7 +286,7 @@ public class FullTextSearchAwareEntitySteps {
     @When("full-text search chunks are created")
     public void fullTextSearchChunksAreCreated() {
         String text = entity.getField1();
-        createdChunks = FullTextSearchAwareEntity.createFullTextSearchChunks(text, entity.getNgramUtilsConfig());
+        createdChunks = FullTextSearchUtils.createFtsChunks(text, entity.getNgramUtilsConfig());
     }
 
     @Then("the chunks should be valid and contain {string} if present")
@@ -363,15 +364,28 @@ public class FullTextSearchAwareEntitySteps {
     }
 
     /**
-     * Rebuilds the ngrams of the configurable entity directly ({@code rebuildFullTextSearchNgrams()} is public) while
-     * remembering the previous data and checksum, so 'remain unchanged'-style steps can reference them.
+     * Rebuilds the ngrams of the configurable entity directly ({@code rebuildFullTextSearchData(boolean)} is public)
+     * while remembering the previous data and checksum, so 'remain unchanged'-style steps can reference them.
      */
     @When("the configurable entity rebuilds its full-text search ngrams")
     public void theConfigurableEntityRebuildsItsFullTextSearchNgrams() {
         previousFullTextSearchData = configurableEntity.getFullTextSearchData();
         previousChecksum = configurableEntity.getFullTextSearchDataChecksum();
 
-        configurableEntity.rebuildFullTextSearchData();
+        configurableEntity.rebuildFullTextSearchData(false);
+    }
+
+    /**
+     * Enforces a rebuild of the ngrams of the configurable entity directly ({@code rebuildFullTextSearchData(true)}),
+     * ignoring an unchanged checksum, while remembering the previous data and checksum, so 'remain unchanged'-style
+     * steps can reference them.
+     */
+    @When("the configurable entity enforces a rebuild of its full-text search ngrams")
+    public void theConfigurableEntityEnforcesARebuildOfItsFullTextSearchNgrams() {
+        previousFullTextSearchData = configurableEntity.getFullTextSearchData();
+        previousChecksum = configurableEntity.getFullTextSearchDataChecksum();
+
+        configurableEntity.rebuildFullTextSearchData(true);
     }
 
     /**
@@ -522,12 +536,12 @@ public class FullTextSearchAwareEntitySteps {
     }
 
     private void callAssignFullTextSearchData(TestEntity entity) {
-        entity.rebuildFullTextSearchData();
+        entity.rebuildFullTextSearchData(false);
     }
 
     // invokes the @PrePersist/@PreUpdate callback wrapper directly
     private void callJpaCallback(FullTextSearchAwareEntity<String> entity) {
-        entity.rebuildFullTextSearchData();
+        entity.rebuildFullTextSearchData(false);
     }
 
     /**

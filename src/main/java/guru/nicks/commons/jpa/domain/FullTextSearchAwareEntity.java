@@ -1,10 +1,8 @@
 package guru.nicks.commons.jpa.domain;
 
-import guru.nicks.commons.utils.text.EnglishUtils;
 import guru.nicks.commons.utils.text.FullTextSearchUtils;
 import guru.nicks.commons.utils.text.NgramUtils;
 import guru.nicks.commons.utils.text.NgramUtilsConfig;
-import guru.nicks.commons.utils.text.TextUtils;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.annotation.Nonnull;
@@ -28,10 +26,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
 import java.util.Collection;
-import java.util.LinkedHashSet;
-import java.util.SequencedSet;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import static guru.nicks.commons.validation.dsl.ValiDsl.checkNotNull;
 
@@ -88,8 +83,8 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
     public static final String FULL_TEXT_SEARCH_DATA_PROPERTY = "fullTextSearchData";
 
     /**
-     * Assigned by {@link #rebuildFullTextSearchData()} and stored in DB to avoid costly ngram recalculation if the
-     * search content has not changed.
+     * Assigned by {@link #rebuildFullTextSearchData(boolean)} and stored in DB to avoid costly ngram recalculation if
+     * the search content has not changed.
      */
     @ToString.Exclude
     @Basic // formally optional (applied by default), but QueryDSL doesn't see this property without this annotation
@@ -125,43 +120,6 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
         return pageable.isUnpaged()
                 ? Pageable.unpaged(newSort)
                 : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), newSort);
-    }
-
-    /**
-     * Splits text into chunks for FTS.
-     *
-     * @param text   source text
-     * @param config ngram utils configuration
-     * @return set of chunks to use for FTS:
-     *         <ul>
-     *             <li>original unique words shorter then {@link NgramUtilsConfig#getMinNgramLength()} - with accents
-     *                 reduced (such as {@code ä → a}) if {@link NgramUtilsConfig#isReduceAccents()} is on and stop
-     *                 words (such as 'the', 'a', 'was', 'I') removed if
-     *                 {@link NgramUtilsConfig#tryEnglishMorphAnalysis()} is on</li>
-     *             <li>ngrams created according to {@link NgramUtilsConfig}</li>
-     *         </ul>
-     */
-    public static SequencedSet<String> createFullTextSearchChunks(String text, NgramUtilsConfig config) {
-        // tokenize once - both the short-words phase and ngram creation below reuse the same word set
-        SequencedSet<String> uniqueWords = TextUtils.collectUniqueWords(text, config.isReduceAccents());
-
-        // add words that are shorter than the minimum ngram length, otherwise they'll be omitted
-        SequencedSet<String> chunks = uniqueWords.stream()
-                .filter(word -> word.length() < config.getMinNgramLength())
-                // either English morph analysis is off or the word is not an English stop word (fast path - words
-                // from collectUniqueWords are already lowercase and trimmed)
-                .filter(word -> !config.tryEnglishMorphAnalysis() || !EnglishUtils.stopWord(word, true))
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-
-        chunks.addAll(NgramUtils.createNgrams(uniqueWords, NgramUtils.Mode.ALL, config));
-
-        // this should never happen after the TextUtils call, but just in case
-        if (chunks.stream().anyMatch(ngram ->
-                ngram.contains("'") || ngram.contains("\"") || ngram.contains("--") || ngram.contains(";"))) {
-            throw new IllegalArgumentException("Invalid characters (SQL injection?) in search text");
-        }
-
-        return chunks;
     }
 
     /**
@@ -220,7 +178,8 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
      * persistent properties have changed in memory).
      * <p>
      * Rebuilds {@link #getFullTextSearchData()} and {@link #getFullTextSearchDataChecksum()} using
-     * {@link #getFullTextSearchDataSuppliers()} and {@link NgramUtils}. Invoked by the JPA callbacks on insert/update.
+     * {@link #getFullTextSearchDataSuppliers()} and {@link NgramUtils} if FTS content has changed since the last
+     * rebuild (as per its checksum).
      * <p>
      * The checksum is streamed while the supplier values are being collected, so on the common unchanged-content path
      * neither the joined text nor its byte representation is ever materialized.
@@ -228,11 +187,27 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
     @PrePersist
     @PreUpdate
     @SuppressWarnings("JpaEntityListenerInspection") // it's OK to have the same callback in parent class
-    public void rebuildFullTextSearchData() {
+    private void rebuildFullTextSearchDataBeforeInsertOrUpdate() {
+        rebuildFullTextSearchData(false);
+    }
+
+    /**
+     * Rebuilds {@link #getFullTextSearchData()} and {@link #getFullTextSearchDataChecksum()} using
+     * {@link #getFullTextSearchDataSuppliers()} and {@link NgramUtils}. This is what the JPA callbacks on insert/update
+     * invoke (with {@code enforce = false}).
+     * <p>
+     * The checksum is streamed while the supplier values are being collected, so on the common unchanged-content path
+     * neither the joined text nor its byte representation is ever materialized.
+     *
+     * @param enforce {@code true} rebuilds unconditionally, ignoring an identical checksum - use for batch reindexing
+     *                after ngram-logic changes; {@code false} skips the rebuild when the checksum is unchanged, i.e.
+     *                the JPA-callback behavior
+     */
+    public void rebuildFullTextSearchData(boolean enforce) {
         // compute checksum of raw text, not of ngrams (the point is to avoid re-calculating ngrams for unchanged text)
-        FullTextSearchUtils.FullTextSearchData ftsData =
-                FullTextSearchUtils.collectFullTextSearchData(getFullTextSearchDataSuppliers());
-        String newChecksum = ftsData.checksum();
+        FullTextSearchUtils.FtsDataSource ftsSource = FullTextSearchUtils.collectFtsDataSource(
+                getFullTextSearchDataSuppliers());
+        String newChecksum = ftsSource.checksum();
 
         // ignore blank checksum - this should never happen, but just to prevent the app from crashing in case of a bug
         if (StringUtils.isBlank(newChecksum)) {
@@ -240,7 +215,7 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
                     getClass().getName(), getId());
         }
         // do nothing if search content has not changed since previous computation
-        else if (newChecksum.equals(fullTextSearchDataChecksum)) {
+        else if (!enforce && newChecksum.equals(fullTextSearchDataChecksum)) {
             if (log.isTraceEnabled()) {
                 log.trace("Not rebuilding FTS chunks: content not changed for [{}] ID '{}'",
                         getClass().getName(), getId());
@@ -251,8 +226,8 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
 
         // Content has changed - only now pay for materializing the joined text.
         // In Postgres, tsvector doesn't look exactly like this, but it doesn't matter - it can be written as a string.
-        setFullTextSearchData(FullTextSearchUtils.buildFullTextSearchData(
-                ftsData.builder(), getNgramUtilsConfig(), getMaxFullTextSearchDataLength()));
+        setFullTextSearchData(FullTextSearchUtils.buildFtsData(
+                ftsSource.builder(), getNgramUtilsConfig(), getMaxFullTextSearchDataLength()));
         fullTextSearchDataChecksum = newChecksum;
 
         if (log.isTraceEnabled()) {

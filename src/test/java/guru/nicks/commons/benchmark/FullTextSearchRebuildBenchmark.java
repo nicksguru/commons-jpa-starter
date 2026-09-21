@@ -5,7 +5,8 @@ import guru.nicks.commons.jpa.domain.FullTextSearchAwareEntity;
 import guru.nicks.commons.utils.text.NgramUtilsConfig;
 
 import ch.qos.logback.classic.Level;
-import jakarta.annotation.Nonnull;
+import lombok.Getter;
+import lombok.Setter;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -28,8 +29,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 /**
- * JMH benchmark for the FTS n-gram rebuild pipeline of {@link FullTextSearchAwareEntity} (FTS_OPTIMIZATION_PLAN.md
- * §5.3). Scenarios:
+ * JMH benchmark for the FTS n-gram rebuild pipeline of {@link FullTextSearchAwareEntity}. Scenarios:
  * <ul>
  *   <li>{@code unchangedContentUpdate} - entity whose FTS content was already built, then saved with identical supplier
  *       values: measures the checksum short-circuit path (the primary case the checksum exists for)</li>
@@ -47,7 +47,7 @@ import java.util.function.Supplier;
  * <p>
  * Run with {@code mvn jmh:benchmark -Djmh.include=FullTextSearchRebuildBenchmark -Djmh.profiler=gc} (the
  * {@code gc.alloc.rate.norm} column is the key metric) - the class is not a JUnit test, so the Cucumber suite and
- * Surefire ignore it, exactly like commons-design-patterns' {@code PipelineBenchmark}.
+ * Surefire ignore it.
  */
 @State(Scope.Thread)
 @BenchmarkMode(Mode.AverageTime)
@@ -166,8 +166,7 @@ public class FullTextSearchRebuildBenchmark {
     public void setup() {
         // the entity logs INFO per changed-content rebuild - unsilenced, that would dominate both console output
         // and the measured timings
-        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(FullTextSearchAwareEntity.class))
-                .setLevel(Level.WARN);
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(FullTextSearchAwareEntity.class)).setLevel(Level.WARN);
 
         String[] wordPool = createWordPool();
         hundredWordVariants = generateTextVariants(SMALL_TEXT_WORD_COUNT, TEXT_SEED, wordPool);
@@ -177,7 +176,7 @@ public class FullTextSearchRebuildBenchmark {
                 NgramUtilsConfig.DEFAULT);
 
         // prime checksum + search data so that benchmark invocations take the checksum short-circuit path
-        unchangedEntity.rebuildFullTextSearchData();
+        unchangedEntity.rebuildFullTextSearchData(false);
 
         freshInsertEntity = new BenchmarkFtsEntity("Fresh insert", hundredWordVariants[0], NgramUtilsConfig.DEFAULT);
         largeTextEntity = new BenchmarkFtsEntity("Large document", thousandWordVariants[0], NgramUtilsConfig.DEFAULT);
@@ -193,7 +192,7 @@ public class FullTextSearchRebuildBenchmark {
      */
     @Benchmark
     public void unchangedContentUpdate(Blackhole bh) {
-        unchangedEntity.rebuildFullTextSearchData();
+        unchangedEntity.rebuildFullTextSearchData(false);
         bh.consume(unchangedEntity.getFullTextSearchDataChecksum());
     }
 
@@ -208,7 +207,7 @@ public class FullTextSearchRebuildBenchmark {
         freshInsertEntity.setText(hundredWordVariants[hundredWordCursor]);
         hundredWordCursor = (hundredWordCursor + 1) % TEXT_VARIANT_COUNT;
 
-        freshInsertEntity.rebuildFullTextSearchData();
+        freshInsertEntity.rebuildFullTextSearchData(false);
         bh.consume(freshInsertEntity.getFullTextSearchData());
     }
 
@@ -222,7 +221,7 @@ public class FullTextSearchRebuildBenchmark {
         largeTextEntity.setText(thousandWordVariants[thousandWordCursor]);
         thousandWordCursor = (thousandWordCursor + 1) % TEXT_VARIANT_COUNT;
 
-        largeTextEntity.rebuildFullTextSearchData();
+        largeTextEntity.rebuildFullTextSearchData(false);
         bh.consume(largeTextEntity.getFullTextSearchData());
     }
 
@@ -237,7 +236,7 @@ public class FullTextSearchRebuildBenchmark {
         saturationEntity.setText(hundredWordVariants[saturationCursor]);
         saturationCursor = (saturationCursor + 1) % TEXT_VARIANT_COUNT;
 
-        saturationEntity.rebuildFullTextSearchData();
+        saturationEntity.rebuildFullTextSearchData(false);
         bh.consume(saturationEntity.getFullTextSearchData());
     }
 
@@ -250,14 +249,23 @@ public class FullTextSearchRebuildBenchmark {
     private static class BenchmarkFtsEntity extends FullTextSearchAwareEntity<Long> {
 
         private final String title;
+
+        @Getter
+        private final Collection<Supplier<String>> fullTextSearchDataSuppliers;
+
+        @Getter
         private final NgramUtilsConfig ngramUtilsConfig;
-        private final Collection<Supplier<String>> suppliers;
 
         // Postgres default: 1 MB - 1 = 1,048,575 characters (EnhancedSqlDialect.POSTGRES)
+        @Getter
         private final int maxFullTextSearchDataLength =
                 JpaInference.DEFAULT_SQL_DIALECT.getMaxFullTextSearchDataLength();
 
+        @Setter
         private String text;
+
+        @Getter
+        @Setter
         private String fullTextSearchData;
 
         /**
@@ -274,7 +282,7 @@ public class FullTextSearchRebuildBenchmark {
 
             // 'this.' is load-bearing: bare 'title'/'text' would capture the constructor parameters, freezing
             // the suppliers at construction-time values and hiding later setText() calls from the rebuild
-            this.suppliers = List.of(() -> this.title, () -> this.text);
+            fullTextSearchDataSuppliers = List.of(() -> this.title, () -> this.text);
         }
 
         @Override
@@ -282,41 +290,6 @@ public class FullTextSearchRebuildBenchmark {
             return 1L;
         }
 
-        @Override
-        public String getFullTextSearchData() {
-            return fullTextSearchData;
-        }
-
-        @Override
-        public void setFullTextSearchData(String value) {
-            fullTextSearchData = value;
-        }
-
-        @Override
-        public int getMaxFullTextSearchDataLength() {
-            return maxFullTextSearchDataLength;
-        }
-
-        @Nonnull
-        @Override
-        public NgramUtilsConfig getNgramUtilsConfig() {
-            return ngramUtilsConfig;
-        }
-
-        @Nonnull
-        @Override
-        protected Collection<Supplier<String>> getFullTextSearchDataSuppliers() {
-            return suppliers;
-        }
-
-        /**
-         * Replaces the mutable text field value, simulating a content change before save.
-         *
-         * @param text new text field value
-         */
-        private void setText(String text) {
-            this.text = text;
-        }
     }
 
     /**
@@ -329,5 +302,6 @@ public class FullTextSearchRebuildBenchmark {
         public int getMaxNgramCount() {
             return SATURATING_MAX_NGRAM_COUNT;
         }
+
     }
 }

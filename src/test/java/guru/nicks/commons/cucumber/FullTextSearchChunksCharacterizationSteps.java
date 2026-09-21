@@ -2,8 +2,9 @@ package guru.nicks.commons.cucumber;
 
 import guru.nicks.commons.cucumber.domain.ChunkingTestEntity;
 import guru.nicks.commons.cucumber.domain.TestNgramUtilsConfig;
-import guru.nicks.commons.jpa.domain.FullTextSearchAwareEntity;
+import guru.nicks.commons.utils.text.FullTextSearchUtils;
 import guru.nicks.commons.utils.text.NgramUtils;
+import guru.nicks.commons.utils.text.NgramUtilsConfig;
 
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
@@ -15,8 +16,8 @@ import java.util.SequencedSet;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Steps for the golden-output characterization of {@link FullTextSearchAwareEntity#createFullTextSearchChunks} and
- * {@link NgramUtils#createNgrams}: every expected value in the feature file is a hard-coded output of the current
+ * Steps for the golden-output characterization of {@link FullTextSearchUtils#createFtsChunks(String, NgramUtilsConfig)}
+ * and {@link NgramUtils#createNgrams}: every expected value in the feature file is a hard-coded output of the current
  * implementation, so any refactor of the chunk ordering/dedup/cap logic must reproduce it byte-for-byte. Scenarios are
  * pure static-method (or direct entity rebuild) calls and need no database.
  */
@@ -67,7 +68,7 @@ public class FullTextSearchChunksCharacterizationSteps {
      */
     @When("full-text search chunks are created from {string}")
     public void fullTextSearchChunksAreCreatedFrom(String text) {
-        chunks = FullTextSearchAwareEntity.createFullTextSearchChunks(text, requireConfig());
+        chunks = FullTextSearchUtils.createFtsChunks(text, requireConfig());
     }
 
     /**
@@ -136,7 +137,7 @@ public class FullTextSearchChunksCharacterizationSteps {
      */
     @When("the chunking entity rebuilds its full-text search ngrams")
     public void theChunkingEntityRebuildsItsFullTextSearchNgrams() {
-        entity.rebuildFullTextSearchData();
+        entity.rebuildFullTextSearchData(false);
     }
 
     /**

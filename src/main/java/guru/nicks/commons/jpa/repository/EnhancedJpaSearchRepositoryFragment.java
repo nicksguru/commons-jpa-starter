@@ -115,14 +115,14 @@ public interface EnhancedJpaSearchRepositoryFragment<T extends Persistable<ID>,
      * Rebuilds full-text search ngrams of <b>all</b> entities of this repository's domain type (<b>method implemented
      * in {@link EnhancedJpaSearchRepositoryFragmentImpl}</b>). Batch maintenance operation for reindexing existing rows
      * after a change in ngram generation logic (for example, a lemmatization fix) that altered ngram output without
-     * changing the raw source text: because {@link FullTextSearchAwareEntity#rebuildFullTextSearchData()}
+     * changing the raw source text: because {@link FullTextSearchAwareEntity#rebuildFullTextSearchData(boolean)}
      * short-circuits on a checksum computed over the raw text (not over the ngrams), such rows never self-heal on
      * regular updates.
      * <p>
-     * The implementation invalidates each entity's stored checksum first (sets it to {@code null}) so the rebuild
-     * cannot short-circuit, then triggers {@link FullTextSearchAwareEntity#rebuildFullTextSearchData()} explicitly and
-     * persists the change. Entities are processed in pages with the persistence context cleared after each batch,
-     * keeping memory consumption bounded regardless of table size.
+     * The implementation triggers {@link FullTextSearchAwareEntity#rebuildFullTextSearchData(boolean)
+     * rebuildFullTextSearchData(true)} - an enforced rebuild that ignores a still-matching checksum - and persists
+     * the change. Entities are processed in pages with the persistence context cleared after each batch, keeping
+     * memory consumption bounded regardless of table size.
      * <p>
      * Runs in the caller's transaction if one is active (it must be read-write); otherwise starts its own single
      * read-write transaction spanning all batches - a failure rolls back everything processed so far.
