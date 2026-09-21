@@ -1,8 +1,8 @@
 package guru.nicks.commons.jpa.it.repo;
 
-import guru.nicks.commons.jpa.it.domain.TestDocument;
 import guru.nicks.commons.jpa.it.domain.TestDocumentFilter;
-import guru.nicks.commons.jpa.it.domain.TestDocumentNotFoundException;
+import guru.nicks.commons.jpa.it.domain.TestEntity;
+import guru.nicks.commons.jpa.it.domain.TestEntityNotFoundException;
 import guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepository;
 
 import com.querydsl.core.BooleanBuilder;
@@ -19,14 +19,14 @@ import static guru.nicks.commons.jpa.domain.FullTextSearchAwareEntity.initSortCr
  * {@link guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepository}: the two mandatory methods are declared as
  * 'default' ones directly in the interface (required by the fail-fast check in the fragment implementation).
  */
-public interface TestDocumentRepository extends EnhancedJpaSearchRepository<TestDocument, String,
-        TestDocumentNotFoundException, TestDocumentFilter> {
+public interface TestDocumentRepository extends EnhancedJpaSearchRepository<TestEntity, String,
+        TestEntityNotFoundException, TestDocumentFilter> {
 
     /**
      * QueryDSL entity path for building predicates in the default methods (test sources have no APT-generated
      * Q-classes, so the path is created dynamically).
      */
-    PathBuilder<TestDocument> DOCUMENT_PATH = new PathBuilderFactory().create(TestDocument.class);
+    PathBuilder<TestEntity> DOCUMENT_PATH = new PathBuilderFactory().create(TestEntity.class);
 
     /**
      * {@inheritDoc}
@@ -39,9 +39,9 @@ public interface TestDocumentRepository extends EnhancedJpaSearchRepository<Test
         }
 
         andIfNotBlank(filter::name, builder,
-                name -> DOCUMENT_PATH.getString(TestDocument.Fields.name).contains(name));
+                name -> DOCUMENT_PATH.getString(TestEntity.Fields.name).contains(name));
         andIfNotNull(filter::userId, builder,
-                userId -> DOCUMENT_PATH.getString(TestDocument.Fields.userId).eq(userId));
+                userId -> DOCUMENT_PATH.getString(TestEntity.Fields.userId).eq(userId));
         andIfNotBlank(filter::color, builder,
                 color -> createJsonContainsPredicate("metadata", color));
         return builder;
@@ -52,7 +52,7 @@ public interface TestDocumentRepository extends EnhancedJpaSearchRepository<Test
      */
     @Override
     @Transactional(readOnly = true)
-    default Page<TestDocument> findByFilter(TestDocumentFilter filter, Pageable pageable) {
+    default Page<TestEntity> findByFilter(TestDocumentFilter filter, Pageable pageable) {
         return findByFilter(filter,
                 () -> filter == null ? null : filter.searchText(),
                 initSortCriteria(filter == null ? null : filter.searchText(), pageable),

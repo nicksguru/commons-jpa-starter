@@ -2,6 +2,7 @@ package guru.nicks.commons.cucumber;
 
 import guru.nicks.commons.jpa.it.repo.TestAuthorRepository;
 import guru.nicks.commons.jpa.it.repo.TestDocumentRepository;
+import guru.nicks.commons.jpa.it.repo.WeightedTestDocumentRepository;
 
 import io.cucumber.java.Before;
 import lombok.RequiredArgsConstructor;
@@ -20,8 +21,7 @@ public class DatabaseCleanupHooks {
 
     // DI
     private final TestAuthorRepository authorRepository;
-
-    // DI
+    private final WeightedTestDocumentRepository weightedDocumentRepository;
     private final PlatformTransactionManager transactionManager;
 
     /**
@@ -30,9 +30,11 @@ public class DatabaseCleanupHooks {
     @Before("@db")
     public void cleanupDatabase() {
         var transactionTemplate = new TransactionTemplate(transactionManager);
+
         transactionTemplate.executeWithoutResult(tx -> {
             documentRepository.deleteAllInBatch();
             authorRepository.deleteAllInBatch();
+            weightedDocumentRepository.deleteAllInBatch();
         });
     }
 }

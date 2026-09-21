@@ -12,6 +12,7 @@ public class TestNgramUtilsConfig implements NgramUtilsConfig {
     private boolean reduceAccents = true;
     private boolean englishMorphAnalysis = true;
     private boolean russianMorphAnalysis = false;
+    private boolean weightedTsvector = false;
     private int maxNgramCount = Short.MAX_VALUE;
     private int minNgramLength = 3;
     private int maxPrefixNgramLength = 6;
@@ -56,6 +57,20 @@ public class TestNgramUtilsConfig implements NgramUtilsConfig {
      */
     public TestNgramUtilsConfig setTryRussianMorphAnalysis(boolean tryRussianMorphAnalysis) {
         this.russianMorphAnalysis = tryRussianMorphAnalysis;
+        return this;
+    }
+
+    @Override
+    public boolean isWeightedTsvector() {
+        return weightedTsvector;
+    }
+
+    /**
+     * @param weightedTsvector whether to emit the weighted tsvector format instead of the plain one
+     * @return this config, for chaining
+     */
+    public TestNgramUtilsConfig setWeightedTsvector(boolean weightedTsvector) {
+        this.weightedTsvector = weightedTsvector;
         return this;
     }
 

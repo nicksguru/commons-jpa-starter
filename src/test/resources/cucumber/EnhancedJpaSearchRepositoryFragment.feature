@@ -54,6 +54,15 @@ Feature: EnhancedJpaSearchRepositoryFragment functionality
     Then the page content names should be "Alpha red document"
     And the total elements should be 1
 
+  # the weighted-tsvector entity stores 'chunk':positionWeight data - the weight-aware H2 emulation of
+  # FULL_TEXT_SEARCH_RANK sums the ts_rank default weights (A = 1.0, B = 0.4), so the document where the search
+  # ngram is a PREFIX ngram ('amp' of 'ampere') outranks the one where it is an INFIX ngram ('amp' of 'lamp')
+  Scenario: Weighted full-text search ranks prefix ngram matches above infix ones
+    Given weighted documents with names "ampere thing" and "lamp thing" exist
+    When weighted documents are searched with a full-text search for "amp"
+    Then the weighted total elements should be 2
+    And the first weighted page content name should be "ampere thing"
+
   Scenario: Full-text search with null or blank text returns unfiltered results
     Given the default documents exist
     When documents are searched with a null full-text search

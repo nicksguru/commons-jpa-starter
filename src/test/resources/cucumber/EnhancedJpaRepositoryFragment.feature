@@ -6,10 +6,10 @@ Feature: EnhancedJpaRepositoryFragment functionality
   stock repositories untouched
 
   Scenario: Fragment metadata is inferred from repository generics
-    Then the fragment entity class should be TestDocument
-    And the fragment exception class should be TestDocumentNotFoundException
+    Then the fragment entity class should be TestEntity
+    And the fragment exception class should be TestEntityNotFoundException
     And the fragment SQL dialect should be POSTGRES
-    And the fragment exception class should be assignable from TestDocumentNotFoundException
+    And the fragment exception class should be assignable from TestEntityNotFoundException
 
   Scenario: getById returns the persisted entity when found
     Given an author "author-1" named "Alice Author"
@@ -19,7 +19,7 @@ Feature: EnhancedJpaRepositoryFragment functionality
 
   Scenario: getById throws the configured exception when the entity is missing
     When the document "missing" is retrieved by ID
-    Then TestDocumentNotFoundException should be thrown
+    Then TestEntityNotFoundException should be thrown
 
   Scenario: Querydsl executor works on the same proxy
     Given an author "author-1" named "Alice Author"

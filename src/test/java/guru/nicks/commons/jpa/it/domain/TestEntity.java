@@ -31,20 +31,20 @@ import java.util.List;
 import java.util.function.Supplier;
 
 /**
- * Test entity for the repository regression suite: full-text-search aware (its {@code name} feeds the ngram data),
- * has a JSON-ish {@code metadata} column for {@code JSON_CONTAINS} tests and a lazy {@code author} association for
+ * Test entity for the repository regression suite: full-text-search aware (its {@code name} feeds the ngram data), has
+ * a JSON-ish {@code metadata} column for {@code JSON_CONTAINS} tests and a lazy {@code author} association for
  * entity-graph tests. The lifecycle callbacks record transaction state so that tests can verify the transactional
  * semantics of the fragment implementations (see {@code TransactionInspector}).
  */
 @Entity
-@Table(name = "test_document")
+@Table(name = "test")
 @NoArgsConstructor
 @Data
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
 @FieldNameConstants
 @SuperBuilder
-public class TestDocument extends FullTextSearchAwareEntity<String> {
+public class TestEntity extends FullTextSearchAwareEntity<String> {
 
     /**
      * Mirrors {@code EnhancedSqlDialect.POSTGRES#getMaxFullTextSearchDataLength()}; duplicated as a constant because

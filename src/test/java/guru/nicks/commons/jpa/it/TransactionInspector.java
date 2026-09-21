@@ -7,9 +7,9 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Records transaction state from inside repository calls. Since fragment implementations are plain classes
- * instantiated per repository (not Spring beans), the state is captured via JPA lifecycle callbacks on
- * {@code TestDocument}: they run inside whatever transaction the repository proxy established for the call.
+ * Records transaction state from inside repository calls. Since fragment implementations are plain classes instantiated
+ * per repository (not Spring beans), the state is captured via JPA lifecycle callbacks on {@code TestEntity}: they run
+ * inside whatever transaction the repository proxy established for the call.
  */
 public final class TransactionInspector {
 
@@ -63,9 +63,9 @@ public final class TransactionInspector {
     /**
      * Transaction state observed inside a repository call.
      *
-     * @param event lifecycle callback that captured the state
-     * @param transactionActive whether a transaction was active at capture time
-     * @param readOnly whether the active transaction was read-only
+     * @param event               lifecycle callback that captured the state
+     * @param transactionActive   whether a transaction was active at capture time
+     * @param readOnly            whether the active transaction was read-only
      * @param transactionIdentity identity hash of the bound EntityManager holder, or -1 if none
      */
     public record Snapshot(String event, boolean transactionActive, boolean readOnly, int transactionIdentity) {

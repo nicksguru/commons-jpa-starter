@@ -14,7 +14,7 @@ import lombok.experimental.SuperBuilder;
 /**
  * Plain test entity NOT extending any Enhanced interface: used to verify that stock repositories keep working in a
  * context where {@code EnhancedJpaRepositoryFactoryBean} is installed, and as the target of a lazy association from
- * {@link TestDocument}.
+ * {@link TestEntity}.
  */
 @Entity
 @Table(name = "test_author")

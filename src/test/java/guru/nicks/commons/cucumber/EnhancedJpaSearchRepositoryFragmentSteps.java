@@ -4,11 +4,13 @@ import guru.nicks.commons.cucumber.world.TextWorld;
 import guru.nicks.commons.jpa.JpaInference;
 import guru.nicks.commons.jpa.impl.EnhancedJpaSearchRepositoryFragmentImpl;
 import guru.nicks.commons.jpa.it.domain.TestAuthor;
-import guru.nicks.commons.jpa.it.domain.TestDocument;
 import guru.nicks.commons.jpa.it.domain.TestDocumentFilter;
-import guru.nicks.commons.jpa.it.domain.TestDocumentNotFoundException;
+import guru.nicks.commons.jpa.it.domain.TestEntity;
+import guru.nicks.commons.jpa.it.domain.TestEntityNotFoundException;
+import guru.nicks.commons.jpa.it.domain.WeightedTestEntity;
 import guru.nicks.commons.jpa.it.repo.TestAuthorRepository;
 import guru.nicks.commons.jpa.it.repo.TestDocumentRepository;
+import guru.nicks.commons.jpa.it.repo.WeightedTestDocumentRepository;
 import guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepository;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -43,6 +45,7 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
     // DI
     private final TestDocumentRepository documentRepository;
     private final TestAuthorRepository authorRepository;
+    private final WeightedTestDocumentRepository weightedDocumentRepository;
     private final EntityManager entityManager;
     private final TransactionTemplate transactionTemplate;
     private final TextWorld textWorld;
@@ -50,7 +53,8 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
     private final ApplicationContext applicationContext;
     private final ObjectMapper objectMapper;
 
-    private Page<TestDocument> resultPage;
+    private Page<TestEntity> resultPage;
+    private Page<WeightedTestEntity> weightedResultPage;
     private Predicate jsonPredicate;
     private BooleanBuilder builder;
     private AtomicBoolean conditionInvoked;
@@ -144,6 +148,58 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
     }
 
     /**
+     * Persists two documents of the weighted-tsvector entity ({@code isWeightedTsvector()} on), whose stored ngram data
+     * is the annotated {@code 'chunk':positionWeight} format ranked by the weight-aware H2 emulation.
+     *
+     * @param name1 name of the first document
+     * @param name2 name of the second document
+     */
+    @Given("weighted documents with names {string} and {string} exist")
+    public void weightedDocumentsWithNamesExist(String name1, String name2) {
+        transactionTemplate.executeWithoutResult(tx -> weightedDocumentRepository.saveAll(List.of(
+                WeightedTestEntity.builder().id("wdoc-1").name(name1).build(),
+                WeightedTestEntity.builder().id("wdoc-2").name(name2).build())));
+    }
+
+    /**
+     * Searches weighted documents by full-text search text, sorted by search rank (desc).
+     *
+     * @param searchText search text whose chunks hit prefix ngrams of one document and infix ngrams of the other
+     */
+    @When("weighted documents are searched with a full-text search for {string}")
+    public void weightedDocumentsAreSearchedWithAFullTextSearchFor(String searchText) {
+        weightedResultPage = weightedDocumentRepository.search(searchText, PageRequest.of(0, 10));
+    }
+
+    /**
+     * Verifies the total element count of the last weighted search result page.
+     *
+     * @param expected expected total elements
+     */
+    @Then("the weighted total elements should be {int}")
+    public void theWeightedTotalElementsShouldBe(int expected) {
+        assertThat(weightedResultPage.getTotalElements())
+                .as("weighted total elements")
+                .isEqualTo(expected);
+    }
+
+    /**
+     * Verifies the first (highest-ranked) document name of the last weighted search result page.
+     *
+     * @param name expected first document name
+     */
+    @Then("the first weighted page content name should be {string}")
+    public void theFirstWeightedPageContentNameShouldBe(String name) {
+        assertThat(weightedResultPage.getContent())
+                .as("weighted page content")
+                .isNotEmpty();
+
+        assertThat(weightedResultPage.getContent().getFirst().getName())
+                .as("first (highest-ranked) weighted page content name")
+                .isEqualTo(name);
+    }
+
+    /**
      * Verifies the total element count of the last search result page.
      *
      * @param expected expected total elements
@@ -175,7 +231,7 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
     @Then("the page content names should be {string}")
     public void thePageContentNamesShouldBe(String names) {
         assertThat(resultPage.getContent())
-                .extracting(TestDocument::getName)
+                .extracting(TestEntity::getName)
                 .containsExactly(names.split(","));
     }
 
@@ -188,7 +244,7 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
     public void theFullTextSearchDataOfAllDocumentsIsCorruptedByABulkJpqlUpdate() {
         transactionTemplate.executeWithoutResult(tx ->
                 entityManager.createQuery(
-                                "UPDATE TestDocument d SET d.fullTextSearchData = :corrupted")
+                                "UPDATE TestEntity d SET d.fullTextSearchData = :corrupted")
                         .setParameter("corrupted", "stale")
                         .executeUpdate());
     }
@@ -356,7 +412,7 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
 
         documentRepository.andIfNotNull(valueSupplier, builder, value -> {
             conditionInvoked.set(true);
-            return TestDocumentRepository.DOCUMENT_PATH.getString(TestDocument.Fields.name).eq(value);
+            return TestDocumentRepository.DOCUMENT_PATH.getString(TestEntity.Fields.name).eq(value);
         });
     }
 
@@ -371,7 +427,7 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
 
         documentRepository.andIfNotBlank(valueSupplier, builder, value -> {
             conditionInvoked.set(true);
-            return TestDocumentRepository.DOCUMENT_PATH.getString(TestDocument.Fields.name).eq(value);
+            return TestDocumentRepository.DOCUMENT_PATH.getString(TestEntity.Fields.name).eq(value);
         });
     }
 
@@ -385,9 +441,9 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
      * @param authorId referenced author ID
      * @return new document
      */
-    private TestDocument newDocument(String id, String name, String userId, String metadata, String authorId) {
+    private TestEntity newDocument(String id, String name, String userId, String metadata, String authorId) {
         var author = authorRepository.getReferenceById(authorId);
-        return TestDocument.builder()
+        return TestEntity.builder()
                 .id(id)
                 .name(name)
                 .userId(userId)
@@ -402,7 +458,7 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
      * so no schema or repository scaffolding is needed.
      */
     private interface NonFtsSearchRepository
-            extends EnhancedJpaSearchRepository<TestAuthor, String, TestDocumentNotFoundException, Void> {
+            extends EnhancedJpaSearchRepository<TestAuthor, String, TestEntityNotFoundException, Void> {
 
         /**
          * {@inheritDoc}

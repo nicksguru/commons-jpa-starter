@@ -51,7 +51,24 @@ import static guru.nicks.commons.validation.dsl.ValiDsl.checkNotNull;
  *   <li>n-grams are generated from entity text fields to support partial and fuzzy matching</li>
  *   <li>search data is automatically updated on entity insert/update</li>
  *   <li>maximum length of search data is limited by {@link EnhancedSqlDialect#getMaxFullTextSearchDataLength()}</li>
+ *   <li>with {@link NgramUtilsConfig#isWeightedTsvector()} on, the data is stored in the weighted tsvector format
+ *       ({@code 'chunk':positionWeight}, weight {@code A} for short words and prefix ngrams, {@code B} for infix
+ *       ngrams) so that prefix matches rank above infix ones</li>
  * </ul>
+ * <p>
+ * For PostgreSQL, the unified functions referenced by {@link EnhancedSqlDialect} templates are recommended to be
+ * created per-database as:
+ * <pre>
+ *  CREATE OR REPLACE FUNCTION FULL_TEXT_SEARCH(t tsvector, q text) RETURNS int
+ *      LANGUAGE sql STABLE AS $$ SELECT CASE WHEN t @@ websearch_to_tsquery('simple', q) THEN 1 ELSE 0 END $$;
+ *
+ *  CREATE OR REPLACE FUNCTION FULL_TEXT_SEARCH_RANK(t tsvector, q text) RETURNS double precision
+ *      LANGUAGE sql STABLE AS $$ SELECT ts_rank(t, websearch_to_tsquery('simple', q)) $$;
+ * </pre>
+ * {@code websearch_to_tsquery} parses the lenient search condition the dialect produces (chunks joined with
+ * {@code ' OR '}). {@code ts_rank}'s default weight array ({@code {0.1, 0.2, 0.4, 1.0}} for {@code D}, {@code C},
+ * {@code B}, {@code A}) picks up the stored weights, making a weight-{@code A} (prefix) match worth 2.5 times a
+ * weight-{@code B} (infix) one.
  *
  * @param <ID> entity ID type
  * @see #getFullTextSearchDataSuppliers()
@@ -225,7 +242,8 @@ public abstract class FullTextSearchAwareEntity<ID> extends AuditableEntity<ID> 
         }
 
         // Content has changed - only now pay for materializing the joined text.
-        // In Postgres, tsvector doesn't look exactly like this, but it doesn't matter - it can be written as a string.
+        // In Postgres, the plain format is not exactly what tsvector looks like internally, but it doesn't matter -
+        // it can be written as a string; the weighted format IS the tsvector input syntax, weights included.
         setFullTextSearchData(FullTextSearchUtils.buildFtsData(
                 ftsSource.builder(), getNgramUtilsConfig(), getMaxFullTextSearchDataLength()));
         fullTextSearchDataChecksum = newChecksum;

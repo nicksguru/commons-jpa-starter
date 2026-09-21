@@ -86,3 +86,64 @@ Feature: createFullTextSearchChunks characterization
       | ALL    | abc abcd bcd |
       | PREFIX | abc abcd bcd |
       | INFIX  | bcd          |
+
+  # the weighted tsvector format annotates every chunk as 'chunk':positionWeight - weight A for short words and
+  # prefix ngrams, weight B for infix ngrams; chunk ordering, dedup and caps are identical to the plain format
+  Scenario: Weighted emission annotates short words and prefix ngrams with A, infix ngrams with B
+    Given ngram config with weighted tsvector on
+    And a chunking test entity with search data "zebra ox hi the a" and max full-text search data length 100
+    When the chunking entity rebuilds its full-text search ngrams
+    Then the full-text search data of the chunking entity is exactly "'hi':1A 'ox':2A 'zeb':3A 'zebr':4A 'zebra':5A 'ebr':6B 'bra':7B"
+
+  Scenario: Weighted emission includes lemma ngrams in the tiers of their phases
+    Given ngram config with weighted tsvector on
+    And a chunking test entity with search data "geese" and max full-text search data length 100
+    When the chunking entity rebuilds its full-text search ngrams
+    Then the full-text search data of the chunking entity is exactly "'gee':1A 'gees':2A 'geese':3A 'goo':4A 'goos':5A 'goose':6A 'ees':7B 'ese':8B 'oos':9B 'ose':10B"
+
+  # 'bcd' is an infix ngram of 'abcd' but also a prefix ngram of 'bcd' - the prefix phase runs first, so it keeps A
+  Scenario: Weighted emission keeps the A tier for ngrams shared by both phases
+    Given ngram config with weighted tsvector on
+    And a chunking test entity with search data "abcd" and max full-text search data length 100
+    When the chunking entity rebuilds its full-text search ngrams
+    Then the full-text search data of the chunking entity is exactly "'abc':1A 'abcd':2A 'bcd':3B"
+
+  Scenario Outline: Weighted emission with a tiny maxNgramCount truncates the prefix phase and discards infix ngrams
+    Given ngram config with weighted tsvector on
+    And ngram config with max ngram count <cap>
+    And a chunking test entity with search data "ox abcdef" and max full-text search data length 200
+    When the chunking entity rebuilds its full-text search ngrams
+    Then the full-text search data of the chunking entity is exactly "<data>"
+    Examples:
+      | cap | data                                                  |
+      | 4   | 'ox':1A 'abc':2A 'abcd':3A 'abcde':4A 'abcdef':5A      |
+      | 6   | 'ox':1A 'abc':2A 'abcd':3A 'abcde':4A 'abcdef':5A 'bcd':6B 'cde':7B |
+
+  # the annotation is counted whenever the builder is non-empty and appending breaks (not skips) at the first
+  # annotated chunk that would not fit
+  Scenario Outline: Weighted append stops at the first annotated chunk that would not fit
+    Given ngram config with weighted tsvector on
+    And a chunking test entity with search data "ox cat zebra" and max full-text search data length <maxLength>
+    When the chunking entity rebuilds its full-text search ngrams
+    Then the full-text search data of the chunking entity is exactly "<data>"
+    Examples:
+      | maxLength | data                                                                            |
+      | 7         | 'ox':1A                                                                         |
+      | 16        | 'ox':1A 'cat':2A                                                                |
+      | 46        | 'ox':1A 'cat':2A 'zeb':3A 'zebr':4A 'zebra':5A                                  |
+      | 64        | 'ox':1A 'cat':2A 'zeb':3A 'zebr':4A 'zebra':5A 'ebr':6B 'bra':7B                |
+
+  Scenario Outline: NgramUtils.createWeightedNgrams pins the per-phase tiers
+    When weighted ngrams are created from "<input>"
+    Then the weighted ngrams are exactly "<ngrams>"
+    Examples:
+      | input             | ngrams                                     |
+      | abcd bcd          | abc:A abcd:A bcd:A                         |
+      | abcd              | abc:A abcd:A bcd:B                         |
+      | zebra ox hi the a | zeb:A zebr:A zebra:A ebr:B bra:B           |
+
+  # positions are 1-based and wrap at 16383 - the maximum the Postgres tsvector input syntax accepts
+  Scenario: Tsvector positions wrap at the Postgres limit
+    Given ngram config with weighted tsvector on
+    When weighted full-text search data is built from 3000 generated words
+    Then the tsvector position annotations wrap at 16383
