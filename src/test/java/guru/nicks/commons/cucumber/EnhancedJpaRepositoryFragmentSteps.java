@@ -3,11 +3,11 @@ package guru.nicks.commons.cucumber;
 import guru.nicks.commons.cucumber.world.TextWorld;
 import guru.nicks.commons.jpa.domain.EnhancedSqlDialect;
 import guru.nicks.commons.jpa.it.TransactionInspector;
-import guru.nicks.commons.jpa.it.domain.TestAuthor;
+import guru.nicks.commons.jpa.it.domain.TestAuthorEntity;
 import guru.nicks.commons.jpa.it.domain.TestEntity;
 import guru.nicks.commons.jpa.it.domain.TestEntityNotFoundException;
 import guru.nicks.commons.jpa.it.repo.TestAuthorRepository;
-import guru.nicks.commons.jpa.it.repo.TestDocumentRepository;
+import guru.nicks.commons.jpa.it.repo.TestRepository;
 import guru.nicks.commons.jpa.repository.EnhancedJpaRepositoryFragment;
 
 import io.cucumber.java.en.Given;
@@ -30,33 +30,27 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Step definitions pinning the hybrid fragment infrastructure of {@code EnhancedJpaRepository}: fragment method routing
  * (getById), Querydsl execution on the same proxy, transactional semantics of fragment methods, batch saves,
  * order-preserving reads, entity graphs, and the untouched stock repository path. All calls run against a real
- * EntityManager backed by H2.
+ * EntityManager backed by PostgreSQL.
  */
 @RequiredArgsConstructor
 public class EnhancedJpaRepositoryFragmentSteps {
 
     // DI
-    private final TestDocumentRepository documentRepository;
-
-    // DI
+    private final TestRepository testRepository;
     private final TestAuthorRepository authorRepository;
-
-    // DI
     private final EntityManager entityManager;
-
-    // DI
     private final TransactionTemplate transactionTemplate;
-
-    // DI
     private final TextWorld textWorld;
 
-    private TestAuthor lastAuthor;
+    private TestAuthorEntity lastAuthor;
     private List<String> newDocumentIds;
     private String newDocumentUserId;
-    private TestEntity retrievedDocument;
-    private Optional<TestEntity> foundDocument;
-    private Iterable<TestEntity> foundDocuments;
-    private List<TestEntity> savedDocuments;
+
+    private TestEntity retrievedEntity;
+    private Optional<TestEntity> foundEntity;
+    private Iterable<TestEntity> foundEntities;
+    private List<TestEntity> savedEntities;
+
     private boolean anyStillManaged;
     private TestEntity fetchedWithGraph;
     private TestEntity lazyDocument;
@@ -69,7 +63,7 @@ public class EnhancedJpaRepositoryFragmentSteps {
      */
     @Then("the fragment entity class should be {word}")
     public void theFragmentEntityClassShouldBe(String simpleName) {
-        assertThat(documentRepository.getEntityClass())
+        assertThat(testRepository.getEntityClass())
                 .as("entity class")
                 .isEqualTo(domainClass(simpleName));
     }
@@ -81,7 +75,7 @@ public class EnhancedJpaRepositoryFragmentSteps {
      */
     @Then("the fragment exception class should be {word}")
     public void theFragmentExceptionClassShouldBe(String simpleName) {
-        assertThat(documentRepository.getExceptionClass())
+        assertThat(testRepository.getExceptionClass())
                 .as("exception class")
                 .isEqualTo(domainClass(simpleName));
     }
@@ -93,7 +87,7 @@ public class EnhancedJpaRepositoryFragmentSteps {
      */
     @Then("the fragment SQL dialect should be {word}")
     public void theFragmentSqlDialectShouldBe(String dialectName) {
-        assertThat(documentRepository.getSqlDialect())
+        assertThat(testRepository.getSqlDialect())
                 .as("SQL dialect")
                 .isEqualTo(EnhancedSqlDialect.valueOf(dialectName));
     }
@@ -105,7 +99,7 @@ public class EnhancedJpaRepositoryFragmentSteps {
      */
     @Then("the fragment exception class should be assignable from {word}")
     public void theFragmentExceptionClassShouldBeAssignableFrom(String simpleName) {
-        assertThat(documentRepository.getExceptionClass())
+        assertThat(testRepository.getExceptionClass())
                 .as("exception class assignability")
                 .isAssignableFrom(domainClass(simpleName));
     }
@@ -169,7 +163,7 @@ public class EnhancedJpaRepositoryFragmentSteps {
     @When("the document {string} is retrieved by ID")
     public void theDocumentIsRetrievedById(String id) {
         try {
-            retrievedDocument = documentRepository.getById(id);
+            retrievedEntity = testRepository.getById(id);
         } catch (RuntimeException e) {
             textWorld.setLastException(e);
         }
@@ -185,8 +179,8 @@ public class EnhancedJpaRepositoryFragmentSteps {
         assertThat(textWorld.getLastException()).as("last exception").isNull();
 
         // the fragment must win over the deprecated SimpleJpaRepository.getById which returns a lazy reference
-        assertThat(retrievedDocument.getClass()).isEqualTo(TestEntity.class);
-        assertThat(retrievedDocument.getName()).isEqualTo(name);
+        assertThat(retrievedEntity.getClass()).isEqualTo(TestEntity.class);
+        assertThat(retrievedEntity.getName()).isEqualTo(name);
     }
 
     /**
@@ -206,8 +200,8 @@ public class EnhancedJpaRepositoryFragmentSteps {
      */
     @When("a document is searched by exact name {string}")
     public void aDocumentIsSearchedByExactName(String name) {
-        foundDocument = documentRepository.findOne(
-                TestDocumentRepository.DOCUMENT_PATH.getString(TestEntity.Fields.name).eq(name));
+        foundEntity = testRepository.findOne(
+                TestRepository.QDSL_PATH.getString(TestEntity.Fields.name).eq(name));
     }
 
     /**
@@ -215,7 +209,7 @@ public class EnhancedJpaRepositoryFragmentSteps {
      */
     @Then("the document should be found")
     public void theDocumentShouldBeFound() {
-        assertThat(foundDocument).as("findOne by predicate").isPresent();
+        assertThat(foundEntity).as("findOne by predicate").isPresent();
     }
 
     /**
@@ -225,8 +219,8 @@ public class EnhancedJpaRepositoryFragmentSteps {
      */
     @When("documents are searched by user {string} sorted by name")
     public void documentsAreSearchedByUserSortedByName(String userId) {
-        foundDocuments = documentRepository.findAll(
-                TestDocumentRepository.DOCUMENT_PATH.getString(TestEntity.Fields.userId).eq(userId),
+        foundEntities = testRepository.findAll(
+                TestRepository.QDSL_PATH.getString(TestEntity.Fields.userId).eq(userId),
                 Sort.by(TestEntity.Fields.name));
     }
 
@@ -237,7 +231,7 @@ public class EnhancedJpaRepositoryFragmentSteps {
      */
     @Then("the found document names should be {string}")
     public void theFoundDocumentNamesShouldBe(String names) {
-        assertThat(foundDocuments)
+        assertThat(foundEntities)
                 .as("findAll by predicate, sorted")
                 .extracting(TestEntity::getName)
                 .containsExactly(names.split(","));
@@ -251,8 +245,8 @@ public class EnhancedJpaRepositoryFragmentSteps {
      */
     @Then("the document count for user {string} should be {int}")
     public void theDocumentCountForUserShouldBe(String userId, int expected) {
-        assertThat(documentRepository.count(
-                TestDocumentRepository.DOCUMENT_PATH.getString(TestEntity.Fields.userId).eq(userId)))
+        assertThat(testRepository.count(
+                TestRepository.QDSL_PATH.getString(TestEntity.Fields.userId).eq(userId)))
                 .as("count by predicate")
                 .isEqualTo(expected);
     }
@@ -265,11 +259,11 @@ public class EnhancedJpaRepositoryFragmentSteps {
      */
     @When("the document {string} is fetched with an entity graph for the author")
     public void theDocumentIsFetchedWithAnEntityGraphForTheAuthor(String id) {
-        var graph = documentRepository.createEntityGraph();
+        var graph = testRepository.createEntityGraph();
         graph.addAttributeNodes(TestEntity.Fields.author);
 
         TransactionInspector.startRecording();
-        fetchedWithGraph = documentRepository.findByIdWithFetchGraph(id, graph).orElse(null);
+        fetchedWithGraph = testRepository.findByIdWithFetchGraph(id, graph).orElse(null);
     }
 
     /**
@@ -300,7 +294,7 @@ public class EnhancedJpaRepositoryFragmentSteps {
      */
     @When("the document {string} is fetched without an entity graph")
     public void theDocumentIsFetchedWithoutAnEntityGraph(String id) {
-        lazyDocument = transactionTemplate.execute(tx -> documentRepository.findById(id)).orElseThrow();
+        lazyDocument = transactionTemplate.execute(tx -> testRepository.findById(id)).orElseThrow();
     }
 
     /**
@@ -322,7 +316,7 @@ public class EnhancedJpaRepositoryFragmentSteps {
     @When("the new documents are saved in batches of {int}")
     public void theNewDocumentsAreSavedInBatchesOf(int batchSize) {
         TransactionInspector.startRecording();
-        savedDocuments = documentRepository.saveAllAndFlushInBatches(newDocumentEntities(), batchSize);
+        savedEntities = testRepository.saveAllAndFlushInBatches(newDocumentEntities(), batchSize);
     }
 
     /**
@@ -353,10 +347,10 @@ public class EnhancedJpaRepositoryFragmentSteps {
     @When("the new documents are saved in batches of {int} within a surrounding transaction")
     public void theNewDocumentsAreSavedInBatchesOfWithinASurroundingTransaction(int batchSize) {
         transactionTemplate.executeWithoutResult(tx -> {
-            savedDocuments = documentRepository.saveAllAndFlushInBatches(newDocumentEntities(), batchSize);
+            savedEntities = testRepository.saveAllAndFlushInBatches(newDocumentEntities(), batchSize);
 
             // checked inside the same transaction: the fragment must have cleared the persistence context
-            anyStillManaged = savedDocuments.stream().anyMatch(entityManager::contains);
+            anyStillManaged = savedEntities.stream().anyMatch(entityManager::contains);
         });
     }
 
@@ -365,7 +359,7 @@ public class EnhancedJpaRepositoryFragmentSteps {
      */
     @When("the new documents are saved in batches with the default batch size")
     public void theNewDocumentsAreSavedInBatchesWithTheDefaultBatchSize() {
-        savedDocuments = documentRepository.saveAllAndFlushInBatches(newDocumentEntities());
+        savedEntities = testRepository.saveAllAndFlushInBatches(newDocumentEntities());
     }
 
     /**
@@ -373,7 +367,7 @@ public class EnhancedJpaRepositoryFragmentSteps {
      */
     @Then("the saved documents should be in input order")
     public void theSavedDocumentsShouldBeInInputOrder() {
-        assertThat(savedDocuments)
+        assertThat(savedEntities)
                 .as("saved entities, in input order")
                 .extracting(TestEntity::getId)
                 .containsExactlyElementsOf(newDocumentIds);
@@ -396,7 +390,7 @@ public class EnhancedJpaRepositoryFragmentSteps {
      */
     @Then("the document count should be {int}")
     public void theDocumentCountShouldBe(int expected) {
-        assertThat(documentRepository.count())
+        assertThat(testRepository.count())
                 .as("all entities persisted")
                 .isEqualTo(expected);
     }
@@ -408,7 +402,7 @@ public class EnhancedJpaRepositoryFragmentSteps {
      */
     @When("documents are found by IDs {string} preserving order")
     public void documentsAreFoundByIdsPreservingOrder(String ids) {
-        foundDocuments = documentRepository.findAllByIdPreserveOrder(List.of(ids.split(",")));
+        foundEntities = testRepository.findAllByIdPreserveOrder(List.of(ids.split(",")));
     }
 
     /**
@@ -418,7 +412,7 @@ public class EnhancedJpaRepositoryFragmentSteps {
      */
     @Then("the found document IDs should be {string}")
     public void theFoundDocumentIdsShouldBe(String ids) {
-        assertThat(foundDocuments)
+        assertThat(foundEntities)
                 .as("found document IDs")
                 .extracting(TestEntity::getId)
                 .containsExactly(ids.split(","));
@@ -432,7 +426,7 @@ public class EnhancedJpaRepositoryFragmentSteps {
      */
     @When("a plain author {string} named {string} is saved via the stock repository")
     public void aPlainAuthorNamedIsSavedViaTheStockRepository(String id, String name) {
-        authorRepository.save(TestAuthor.builder().id(id).name(name).build());
+        authorRepository.save(TestAuthorEntity.builder().id(id).name(name).build());
         lastSavedAuthorId = id;
     }
 
@@ -460,9 +454,9 @@ public class EnhancedJpaRepositoryFragmentSteps {
      * @param name author name
      * @return persisted (detached after the transaction) author
      */
-    private TestAuthor persistAuthor(String id, String name) {
+    private TestAuthorEntity persistAuthor(String id, String name) {
         return transactionTemplate.execute(tx ->
-                authorRepository.save(TestAuthor.builder().id(id).name(name).build()));
+                authorRepository.save(TestAuthorEntity.builder().id(id).name(name).build()));
     }
 
     /**
@@ -474,9 +468,9 @@ public class EnhancedJpaRepositoryFragmentSteps {
      * @param author author association
      * @return persisted (detached after the transaction) document
      */
-    private TestEntity persistDocument(String id, String name, String userId, TestAuthor author) {
+    private TestEntity persistDocument(String id, String name, String userId, TestAuthorEntity author) {
         return transactionTemplate.execute(tx ->
-                documentRepository.save(newDocument(id, name, userId, author)));
+                testRepository.save(newDocument(id, name, userId, author)));
     }
 
     /**
@@ -499,7 +493,7 @@ public class EnhancedJpaRepositoryFragmentSteps {
      * @param author author association
      * @return new document
      */
-    private TestEntity newDocument(String id, String name, String userId, TestAuthor author) {
+    private TestEntity newDocument(String id, String name, String userId, TestAuthorEntity author) {
         return TestEntity.builder()
                 .id(id)
                 .name(name)

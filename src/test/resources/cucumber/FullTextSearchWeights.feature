@@ -1,4 +1,4 @@
-Feature: createFullTextSearchChunks characterization
+Feature: createFullTextSearchChunks weights
 
   Background:
     Given default ngram config
@@ -115,8 +115,8 @@ Feature: createFullTextSearchChunks characterization
     When the chunking entity rebuilds its full-text search ngrams
     Then the full-text search data of the chunking entity is exactly "<data>"
     Examples:
-      | cap | data                                                  |
-      | 4   | 'ox':1A 'abc':2A 'abcd':3A 'abcde':4A 'abcdef':5A      |
+      | cap | data                                                                |
+      | 4   | 'ox':1A 'abc':2A 'abcd':3A 'abcde':4A 'abcdef':5A                   |
       | 6   | 'ox':1A 'abc':2A 'abcd':3A 'abcde':4A 'abcdef':5A 'bcd':6B 'cde':7B |
 
   # the annotation is counted whenever the builder is non-empty and appending breaks (not skips) at the first
@@ -127,20 +127,20 @@ Feature: createFullTextSearchChunks characterization
     When the chunking entity rebuilds its full-text search ngrams
     Then the full-text search data of the chunking entity is exactly "<data>"
     Examples:
-      | maxLength | data                                                                            |
-      | 7         | 'ox':1A                                                                         |
-      | 16        | 'ox':1A 'cat':2A                                                                |
-      | 46        | 'ox':1A 'cat':2A 'zeb':3A 'zebr':4A 'zebra':5A                                  |
-      | 64        | 'ox':1A 'cat':2A 'zeb':3A 'zebr':4A 'zebra':5A 'ebr':6B 'bra':7B                |
+      | maxLength | data                                                             |
+      | 7         | 'ox':1A                                                          |
+      | 16        | 'ox':1A 'cat':2A                                                 |
+      | 46        | 'ox':1A 'cat':2A 'zeb':3A 'zebr':4A 'zebra':5A                   |
+      | 64        | 'ox':1A 'cat':2A 'zeb':3A 'zebr':4A 'zebra':5A 'ebr':6B 'bra':7B |
 
   Scenario Outline: NgramUtils.createWeightedNgrams pins the per-phase tiers
     When weighted ngrams are created from "<input>"
     Then the weighted ngrams are exactly "<ngrams>"
     Examples:
-      | input             | ngrams                                     |
-      | abcd bcd          | abc:A abcd:A bcd:A                         |
-      | abcd              | abc:A abcd:A bcd:B                         |
-      | zebra ox hi the a | zeb:A zebr:A zebra:A ebr:B bra:B           |
+      | input             | ngrams                           |
+      | abcd bcd          | abc:A abcd:A bcd:A               |
+      | abcd              | abc:A abcd:A bcd:B               |
+      | zebra ox hi the a | zeb:A zebr:A zebra:A ebr:B bra:B |
 
   # positions are 1-based and wrap at 16383 - the maximum the Postgres tsvector input syntax accepts
   Scenario: Tsvector positions wrap at the Postgres limit

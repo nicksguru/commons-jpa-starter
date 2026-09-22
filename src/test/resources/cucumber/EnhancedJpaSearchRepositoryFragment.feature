@@ -2,7 +2,7 @@
 Feature: EnhancedJpaSearchRepositoryFragment functionality
   EnhancedJpaSearchRepositoryFragment should correctly apply filter predicates with pagination and sorting, add
   conditions only for non-null/non-blank values, JSON-quote values against SQL injection, reject invalid property
-  names, find entities by ngram fuzzy match via the H2-emulated FULL_TEXT_SEARCH and JSON_CONTAINS functions, and
+  names, find entities by ngram fuzzy match via the PostgreSQL FULL_TEXT_SEARCH and JSON_CONTAINS functions, and
   batch-rebuild stale FTS ngrams via rebuildFullTextSearchData()
 
   Scenario: findByFilter applies the filter predicate, pagination and sorting at once
@@ -54,9 +54,9 @@ Feature: EnhancedJpaSearchRepositoryFragment functionality
     Then the page content names should be "Alpha red document"
     And the total elements should be 1
 
-  # the weighted-tsvector entity stores 'chunk':positionWeight data - the weight-aware H2 emulation of
-  # FULL_TEXT_SEARCH_RANK sums the ts_rank default weights (A = 1.0, B = 0.4), so the document where the search
-  # ngram is a PREFIX ngram ('amp' of 'ampere') outranks the one where it is an INFIX ngram ('amp' of 'lamp')
+  # the weighted-tsvector entity stores 'chunk':positionWeight data - ts_rank's default weights (A = 1.0, B = 0.4)
+  # make the document where the search ngram is a PREFIX ngram ('amp' of 'ampere') outrank the one where it is an
+  # INFIX ngram ('amp' of 'lamp')
   Scenario: Weighted full-text search ranks prefix ngram matches above infix ones
     Given weighted documents with names "ampere thing" and "lamp thing" exist
     When weighted documents are searched with a full-text search for "amp"

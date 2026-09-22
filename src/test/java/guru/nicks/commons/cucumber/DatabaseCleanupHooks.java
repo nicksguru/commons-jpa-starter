@@ -1,8 +1,8 @@
 package guru.nicks.commons.cucumber;
 
 import guru.nicks.commons.jpa.it.repo.TestAuthorRepository;
-import guru.nicks.commons.jpa.it.repo.TestDocumentRepository;
-import guru.nicks.commons.jpa.it.repo.WeightedTestDocumentRepository;
+import guru.nicks.commons.jpa.it.repo.TestRepository;
+import guru.nicks.commons.jpa.it.repo.WeightedTestRepository;
 
 import io.cucumber.java.Before;
 import lombok.RequiredArgsConstructor;
@@ -17,11 +17,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class DatabaseCleanupHooks {
 
     // DI
-    private final TestDocumentRepository documentRepository;
+    private final TestRepository testRepository;
 
     // DI
-    private final TestAuthorRepository authorRepository;
-    private final WeightedTestDocumentRepository weightedDocumentRepository;
+    private final TestAuthorRepository testAuthorRepository;
+    private final WeightedTestRepository weightedTestRepository;
     private final PlatformTransactionManager transactionManager;
 
     /**
@@ -32,9 +32,9 @@ public class DatabaseCleanupHooks {
         var transactionTemplate = new TransactionTemplate(transactionManager);
 
         transactionTemplate.executeWithoutResult(tx -> {
-            documentRepository.deleteAllInBatch();
-            authorRepository.deleteAllInBatch();
-            weightedDocumentRepository.deleteAllInBatch();
+            testRepository.deleteAllInBatch();
+            testAuthorRepository.deleteAllInBatch();
+            weightedTestRepository.deleteAllInBatch();
         });
     }
 }

@@ -22,8 +22,8 @@ import java.util.regex.Pattern;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Steps for the golden-output characterization of {@link FullTextSearchUtils#createFtsChunks(String, NgramUtilsConfig)}
- * and {@link NgramUtils#createNgrams}: every expected value in the feature file is a hard-coded output of the current
+ * Steps for the golden-output weights of {@link FullTextSearchUtils#createFtsChunks(String, NgramUtilsConfig)} and
+ * {@link NgramUtils#createNgrams}: every expected value in the feature file is a hard-coded output of the current
  * implementation, so any refactor of the chunk ordering/dedup/cap logic must reproduce it byte-for-byte. Scenarios are
  * pure static-method (or direct entity rebuild) calls and need no database.
  * <p>
@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@link NgramUtilsConfig#isWeightedTsvector()} emission of {@link FullTextSearchUtils#buildFtsData}: annotated chunks
  * {@code 'chunk':positionWeight} with weight {@code A} for short words and prefix ngrams, {@code B} for infix ngrams.
  */
-public class FullTextSearchChunksCharacterizationSteps {
+public class FullTextSearchChunksWeightsSteps {
 
     /**
      * Maximum lexeme position accepted by the Postgres tsvector input syntax - the emission wraps at it.
@@ -241,8 +241,8 @@ public class FullTextSearchChunksCharacterizationSteps {
 
     /**
      * Verifies the emitted positions are the expected 1-based sequence wrapped at the Postgres limit: strictly
-     * incrementing by 1 and jumping back to 1 right after {@value #MAX_TSVECTOR_POSITION}, which also proves the
-     * corpus produced more chunks than the limit itself.
+     * incrementing by 1 and jumping back to 1 right after {@value #MAX_TSVECTOR_POSITION}, which also proves the corpus
+     * produced more chunks than the limit itself.
      */
     @Then("the tsvector position annotations wrap at 16383")
     public void theTsvectorPositionAnnotationsWrap() {

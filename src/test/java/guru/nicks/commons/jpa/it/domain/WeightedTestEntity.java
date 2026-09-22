@@ -1,6 +1,7 @@
 package guru.nicks.commons.jpa.it.domain;
 
 import guru.nicks.commons.jpa.JpaInference;
+import guru.nicks.commons.jpa.domain.EnhancedSqlDialect;
 import guru.nicks.commons.jpa.domain.FullTextSearchAwareEntity;
 import guru.nicks.commons.utils.text.NgramUtilsConfig;
 
@@ -26,8 +27,8 @@ import java.util.function.Supplier;
 /**
  * Test entity for the weighted-tsvector regression scenario: identical to {@link TestEntity} in what feeds the ngram
  * data (its {@code name}), but its ngram config turns {@link NgramUtilsConfig#isWeightedTsvector()} on, so the stored
- * {@code fullTextSearchData} is the annotated {@code 'chunk':positionWeight} format ranked by the weight-aware H2
- * emulation of {@code FULL_TEXT_SEARCH_RANK}.
+ * {@code fullTextSearchData} is the annotated {@code 'chunk':positionWeight} format ranked by the real {@code ts_rank}
+ * weights in PostgreSQL.
  */
 @Entity
 @Table(name = "weighted_test")
@@ -61,8 +62,10 @@ public class WeightedTestEntity extends FullTextSearchAwareEntity<String> {
 
     private String name;
 
-    // column name kept verbatim (no snake_case override) so that the SQL templates embedded by EnhancedSqlDialect,
-    // which reference the camelCase property name, resolve in H2
+    /**
+     * Column name kept verbatim (no snake_case override) so that the SQL templates embedded by
+     * {@link EnhancedSqlDialect}, which reference the camelCase property name, resolve in PostgreSQL.
+     */
     @Column(name = "fullTextSearchData", length = MAX_FULL_TEXT_SEARCH_DATA_LENGTH)
     private String fullTextSearchData;
 
@@ -79,6 +82,7 @@ public class WeightedTestEntity extends FullTextSearchAwareEntity<String> {
 
     @JsonIgnore
     @Transient
+    @Nonnull
     @Override
     protected Collection<Supplier<String>> getFullTextSearchDataSuppliers() {
         return List.of(this::getName);

@@ -3,11 +3,13 @@ package guru.nicks.commons.cucumber;
 import guru.nicks.commons.cucumber.world.JpaWorld;
 import guru.nicks.commons.cucumber.world.TextWorld;
 import guru.nicks.commons.jpa.it.JpaItTestApplication;
+import guru.nicks.commons.test.PostgreSqlContainerRunner;
 
 import io.cucumber.spring.CucumberContextConfiguration;
 import org.mockito.Mock;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
@@ -19,16 +21,18 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  * ({@link Mock @Mock}) do not conflict with each other.
  * <p>
  * Boots {@link JpaItTestApplication} with the {@code jpa-it} profile so that scenarios can exercise the enhanced
- * repository fragments against a real H2 database (see {@code application-jpa-it.properties}); the scenario-scoped
- * worlds are registered alongside it.
+ * repository fragments against a real PostgreSQL (TimescaleDB-HA) database started via TestContainers (see
+ * {@link PostgreSqlContainerRunner} and {@code application-jpa-it.properties}); the scenario-scoped worlds are
+ * registered alongside it.
  */
 @CucumberContextConfiguration
 @SpringBootTest(classes = {
-        // application under test: H2 + enhanced repository factory bean
+        // application under test: enhanced repository factory bean
         JpaItTestApplication.class,
         // scenario-scoped states
         TextWorld.class, JpaWorld.class
 }, webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@ContextConfiguration(initializers = PostgreSqlContainerRunner.class)
 @ActiveProfiles("jpa-it")
 public class CucumberBootstrap {
 }

@@ -9,7 +9,8 @@ package guru.nicks.commons.jpa.it.domain;
  * @param color      value to search for inside the JSON metadata column, can be {@code null}/blank
  * @param searchText full-text (ngram fuzzy) search text, can be {@code null}/blank
  */
-public record TestDocumentFilter(
+public record TestEntityFilter(
+
         String name,
         String userId,
         String color,

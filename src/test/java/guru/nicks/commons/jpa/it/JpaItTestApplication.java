@@ -6,9 +6,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 /**
- * Spring Boot application for the repository regression tests: boots an H2 in-memory database and installs
- * {@link EnhancedJpaRepositoryFactoryBean} for the test repositories, exactly as real applications are instructed to
- * do by {@code CommonsJpaAutoConfiguration}.
+ * Spring Boot application for the repository regression tests: boots a PostgreSQL (TimescaleDB-HA) TestContainers
+ * database (see {@code PostgreSqlContainerRunner}) and installs {@link EnhancedJpaRepositoryFactoryBean} for the test
+ * repositories, exactly as real applications are instructed to do by {@code CommonsJpaAutoConfiguration}.
  */
 @SpringBootApplication
 @EnableJpaRepositories(basePackages = "guru.nicks.commons.jpa.it.repo",

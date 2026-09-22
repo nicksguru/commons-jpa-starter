@@ -51,34 +51,27 @@ public class TestEntity extends FullTextSearchAwareEntity<String> {
      * annotation values must be compile-time constants.
      */
     private static final int MAX_FULL_TEXT_SEARCH_DATA_LENGTH = 1024 * 1024 - 1;
-
-    @Id
-    @Getter(onMethod_ = @Override)
-    private String id;
-
-    private String name;
-
-    private String userId;
-
-    // JSON-ish column, queried via createJsonContainsPredicate(...)
-    private String metadata;
-
-    // column name kept verbatim (no snake_case override) so that the SQL templates embedded by EnhancedSqlDialect,
-    // which reference the camelCase property name, resolve in H2
-    @Column(name = "fullTextSearchData", length = MAX_FULL_TEXT_SEARCH_DATA_LENGTH)
-    private String fullTextSearchData;
-
     @Getter(value = AccessLevel.PROTECTED, onMethod_ = @Override)
     @JsonIgnore
     @ToString.Exclude
     @Transient
     private final Collection<Supplier<String>> fullTextSearchDataSuppliers = List.of(
             this::getName);
-
+    @Id
+    @Getter(onMethod_ = @Override)
+    private String id;
+    private String name;
+    private String userId;
+    // JSON-ish column, queried via createJsonContainsPredicate(...)
+    private String metadata;
+    // column name kept verbatim (no snake_case override) so that the SQL templates embedded by EnhancedSqlDialect,
+    // which reference the camelCase property name, resolve in PostgreSQL
+    @Column(name = "fullTextSearchData", length = MAX_FULL_TEXT_SEARCH_DATA_LENGTH)
+    private String fullTextSearchData;
     @ToString.Exclude
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "authorId")
-    private TestAuthor author;
+    private TestAuthorEntity author;
 
     @Override
     public int getMaxFullTextSearchDataLength() {

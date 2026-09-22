@@ -14,9 +14,9 @@ import static guru.nicks.commons.jpa.domain.FullTextSearchAwareEntity.initSortCr
 
 /**
  * Test repository over {@link WeightedTestEntity} (the {@code isWeightedTsvector()} entity) for the weighted-tsvector
- * ranking scenario - mirrors {@link TestDocumentRepository} with a null filter and the search text passed directly.
+ * ranking scenario - mirrors {@link TestRepository} with a null filter and the search text passed directly.
  */
-public interface WeightedTestDocumentRepository extends EnhancedJpaSearchRepository<WeightedTestEntity, String,
+public interface WeightedTestRepository extends EnhancedJpaSearchRepository<WeightedTestEntity, String,
         RuntimeException, Void> {
 
     /**

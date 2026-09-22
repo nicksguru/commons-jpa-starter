@@ -3,14 +3,14 @@ package guru.nicks.commons.cucumber;
 import guru.nicks.commons.cucumber.world.TextWorld;
 import guru.nicks.commons.jpa.JpaInference;
 import guru.nicks.commons.jpa.impl.EnhancedJpaSearchRepositoryFragmentImpl;
-import guru.nicks.commons.jpa.it.domain.TestAuthor;
-import guru.nicks.commons.jpa.it.domain.TestDocumentFilter;
+import guru.nicks.commons.jpa.it.domain.TestAuthorEntity;
 import guru.nicks.commons.jpa.it.domain.TestEntity;
+import guru.nicks.commons.jpa.it.domain.TestEntityFilter;
 import guru.nicks.commons.jpa.it.domain.TestEntityNotFoundException;
 import guru.nicks.commons.jpa.it.domain.WeightedTestEntity;
 import guru.nicks.commons.jpa.it.repo.TestAuthorRepository;
-import guru.nicks.commons.jpa.it.repo.TestDocumentRepository;
-import guru.nicks.commons.jpa.it.repo.WeightedTestDocumentRepository;
+import guru.nicks.commons.jpa.it.repo.TestRepository;
+import guru.nicks.commons.jpa.it.repo.WeightedTestRepository;
 import guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepository;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,22 +36,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Step definitions pinning {@code EnhancedJpaSearchRepositoryFragment}: filter predicates with pagination/sorting,
- * andIfNotNull/andIfNotBlank helpers, the JSON-contains predicate (executed against the H2-emulated JSON_CONTAINS
- * function) and the full-text search ngram path (executed against the H2-emulated FULL_TEXT_SEARCH function).
+ * andIfNotNull/andIfNotBlank helpers, the JSON-contains predicate (executed against the PostgreSQL JSON_CONTAINS
+ * function) and the full-text search ngram path (executed against the PostgreSQL FULL_TEXT_SEARCH function).
  */
 @RequiredArgsConstructor
 public class EnhancedJpaSearchRepositoryFragmentSteps {
 
     // DI
-    private final TestDocumentRepository documentRepository;
-    private final TestAuthorRepository authorRepository;
-    private final WeightedTestDocumentRepository weightedDocumentRepository;
-    private final EntityManager entityManager;
+    private final TestRepository testRepository;
+    private final TestAuthorRepository testAuthorRepository;
+    private final WeightedTestRepository weightedTestRepository;
+    //
     private final TransactionTemplate transactionTemplate;
     private final TextWorld textWorld;
     private final JpaInference jpaInference;
-    private final ApplicationContext applicationContext;
+    private final EntityManager entityManager;
     private final ObjectMapper objectMapper;
+    private final ApplicationContext applicationContext;
 
     private Page<TestEntity> resultPage;
     private Page<WeightedTestEntity> weightedResultPage;
@@ -61,114 +62,114 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
     private long rebuiltCount;
 
     /**
-     * Persists the default document set: three documents spread over two authors and users, with JSON metadata.
+     * Persists the default entity set: three entities spread over two authors and users, with JSON metadata.
      */
     @Given("the default documents exist")
     public void theDefaultDocumentsExist() {
         transactionTemplate.executeWithoutResult(tx -> {
-            authorRepository.saveAll(List.of(
-                    TestAuthor.builder().id("author-alice").name("Alice Author").build(),
-                    TestAuthor.builder().id("author-bob").name("Bob Author").build()));
-            documentRepository.saveAll(List.of(
-                    newDocument("doc-1", "Alpha red document", "user-1", "{\"color\":\"red\"}", "author-alice"),
-                    newDocument("doc-2", "Beta blue document", "user-1", "{\"color\":\"blue\"}", "author-alice"),
-                    newDocument("doc-3", "Gamma green document", "user-2", "{\"color\":\"green\"}", "author-bob")));
+            testAuthorRepository.saveAll(List.of(
+                    TestAuthorEntity.builder().id("author-alice").name("Alice Author").build(),
+                    TestAuthorEntity.builder().id("author-bob").name("Bob Author").build()));
+            testRepository.saveAll(List.of(
+                    createEntity("doc-1", "Alpha red document", "user-1", "{\"color\":\"red\"}", "author-alice"),
+                    createEntity("doc-2", "Beta blue document", "user-1", "{\"color\":\"blue\"}", "author-alice"),
+                    createEntity("doc-3", "Gamma green document", "user-2", "{\"color\":\"green\"}", "author-bob")));
         });
     }
 
     /**
-     * Searches documents with a name/user filter, pagination and sorting.
+     * Searches entities with a name/user filter, pagination and sorting.
      *
-     * @param name   substring to match the document name against
+     * @param name   substring to match the entity name against
      * @param userId exact user ID to match
      * @param page   1-based page number
      * @param size   page size
      */
     @When("documents are searched with a filter for name {string} and user {string} requesting page {int} of size {int} sorted by name")
     public void documentsAreSearchedWithAFilterForNameAndUser(String name, String userId, int page, int size) {
-        var filter = new TestDocumentFilter(name, userId, null, null);
-        resultPage = documentRepository.findByFilter(filter, PageRequest.of(page - 1, size, Sort.by("name")));
+        var filter = new TestEntityFilter(name, userId, null, null);
+        resultPage = testRepository.findByFilter(filter, PageRequest.of(page - 1, size, Sort.by("name")));
     }
 
     /**
-     * Searches documents with a null filter (no conditions at all).
+     * Searches entities with a null filter (no conditions at all).
      */
     @When("documents are searched with a null filter")
     public void documentsAreSearchedWithANullFilter() {
-        resultPage = documentRepository.findByFilter(null, PageRequest.of(0, 10));
+        resultPage = testRepository.findByFilter(null, PageRequest.of(0, 10));
     }
 
     /**
-     * Searches documents with an all-null filter (no conditions at all).
+     * Searches entities with an all-null filter (no conditions at all).
      */
     @When("documents are searched with an empty filter")
     public void documentsAreSearchedWithAnEmptyFilter() {
-        resultPage = documentRepository.findByFilter(new TestDocumentFilter(null, null, null, null),
+        resultPage = testRepository.findByFilter(new TestEntityFilter(null, null, null, null),
                 PageRequest.of(0, 10));
     }
 
     /**
-     * Searches documents by a value inside the JSON metadata column.
+     * Searches entities by a value inside the JSON metadata column.
      *
      * @param color color value to look for in the metadata JSON
      */
     @When("documents are searched with a filter for metadata color {string}")
     public void documentsAreSearchedWithAFilterForMetadataColor(String color) {
-        resultPage = documentRepository.findByFilter(new TestDocumentFilter(null, null, color, null),
+        resultPage = testRepository.findByFilter(new TestEntityFilter(null, null, color, null),
                 PageRequest.of(0, 10));
     }
 
     /**
-     * Searches documents by full-text (ngram fuzzy) search text.
+     * Searches entities by full-text (ngram fuzzy) search text.
      *
      * @param searchText search text, may be deliberately misspelled
      */
     @When("documents are searched with a full-text search for {string}")
     public void documentsAreSearchedWithAFullTextSearchFor(String searchText) {
-        resultPage = documentRepository.findByFilter(new TestDocumentFilter(null, null, null, searchText),
+        resultPage = testRepository.findByFilter(new TestEntityFilter(null, null, null, searchText),
                 PageRequest.of(0, 10));
     }
 
     /**
-     * Searches documents with a null full-text search text (no FTS condition applied).
+     * Searches entities with a null full-text search text (no FTS condition applied).
      */
     @When("documents are searched with a null full-text search")
     public void documentsAreSearchedWithANullFullTextSearch() {
-        resultPage = documentRepository.findByFilter(new TestDocumentFilter(null, null, null, null),
+        resultPage = testRepository.findByFilter(new TestEntityFilter(null, null, null, null),
                 PageRequest.of(0, 10));
     }
 
     /**
-     * Searches documents with a blank full-text search text (no FTS condition applied).
+     * Searches entities with a blank full-text search text (no FTS condition applied).
      */
     @When("documents are searched with a blank full-text search")
     public void documentsAreSearchedWithABlankFullTextSearch() {
-        resultPage = documentRepository.findByFilter(new TestDocumentFilter(null, null, null, " "),
+        resultPage = testRepository.findByFilter(new TestEntityFilter(null, null, null, " "),
                 PageRequest.of(0, 10));
     }
 
     /**
-     * Persists two documents of the weighted-tsvector entity ({@code isWeightedTsvector()} on), whose stored ngram data
-     * is the annotated {@code 'chunk':positionWeight} format ranked by the weight-aware H2 emulation.
+     * Persists two entities of the weighted-tsvector entity ({@code isWeightedTsvector()} on), whose stored ngram data
+     * is the annotated {@code 'chunk':positionWeight} format ranked by the real {@code ts_rank} weights.
      *
-     * @param name1 name of the first document
-     * @param name2 name of the second document
+     * @param name1 name of the first entity
+     * @param name2 name of the second entity
      */
     @Given("weighted documents with names {string} and {string} exist")
     public void weightedDocumentsWithNamesExist(String name1, String name2) {
-        transactionTemplate.executeWithoutResult(tx -> weightedDocumentRepository.saveAll(List.of(
+        transactionTemplate.executeWithoutResult(tx -> weightedTestRepository.saveAll(List.of(
                 WeightedTestEntity.builder().id("wdoc-1").name(name1).build(),
                 WeightedTestEntity.builder().id("wdoc-2").name(name2).build())));
     }
 
     /**
-     * Searches weighted documents by full-text search text, sorted by search rank (desc).
+     * Searches weighted entities by full-text search text, sorted by search rank (desc).
      *
-     * @param searchText search text whose chunks hit prefix ngrams of one document and infix ngrams of the other
+     * @param searchText search text whose chunks hit prefix ngrams of one entity and infix ngrams of the other
      */
     @When("weighted documents are searched with a full-text search for {string}")
     public void weightedDocumentsAreSearchedWithAFullTextSearchFor(String searchText) {
-        weightedResultPage = weightedDocumentRepository.search(searchText, PageRequest.of(0, 10));
+        weightedResultPage = weightedTestRepository.search(searchText, PageRequest.of(0, 10));
     }
 
     /**
@@ -184,9 +185,9 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
     }
 
     /**
-     * Verifies the first (highest-ranked) document name of the last weighted search result page.
+     * Verifies the first (highest-ranked) entity name of the last weighted search result page.
      *
-     * @param name expected first document name
+     * @param name expected first entity name
      */
     @Then("the first weighted page content name should be {string}")
     public void theFirstWeightedPageContentNameShouldBe(String name) {
@@ -224,7 +225,7 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
     }
 
     /**
-     * Verifies the document names in the last search result page, in order.
+     * Verifies the entity names in the last search result page, in order.
      *
      * @param names comma-separated expected names, in order
      */
@@ -236,7 +237,7 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
     }
 
     /**
-     * Corrupts the stored ngram data of all documents via a bulk JPQL update, bypassing {@code @PreUpdate} callbacks.
+     * Corrupts the stored ngram data of all entities via a bulk JPQL update, bypassing {@code @PreUpdate} callbacks.
      * This simulates rows left stale by a change in ngram generation logic (e.g. a lemmatization fix): the checksum
      * still matches the raw text (which is untouched), so a regular save would never rebuild the ngrams.
      */
@@ -250,11 +251,11 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
     }
 
     /**
-     * Invokes the batch reindex on the document repository.
+     * Invokes the batch reindex on the entity repository.
      */
     @When("the full-text search data is rebuilt")
     public void theFullTextSearchDataIsRebuilt() {
-        rebuiltCount = documentRepository.rebuildFullTextSearchData();
+        rebuiltCount = testRepository.rebuildFullTextSearchData();
     }
 
     /**
@@ -270,9 +271,9 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
     }
 
     /**
-     * Verifies the first (highest-ranked) document name of the last search result page.
+     * Verifies the first (highest-ranked) entity name of the last search result page.
      *
-     * @param name expected first document name
+     * @param name expected first entity name
      */
     @Then("the first page content name should be {string}")
     public void theFirstPageContentNameShouldBe(String name) {
@@ -357,7 +358,7 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
     @When("a JSON contains predicate is created for property {string} and value {string}")
     public void aJsonContainsPredicateIsCreatedForPropertyAndValue(String property, String value) {
         try {
-            jsonPredicate = documentRepository.createJsonContainsPredicate(property, value);
+            jsonPredicate = testRepository.createJsonContainsPredicate(property, value);
         } catch (RuntimeException e) {
             textWorld.setLastException(e);
         }
@@ -410,9 +411,9 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
         builder = new BooleanBuilder();
         conditionInvoked = new AtomicBoolean(false);
 
-        documentRepository.andIfNotNull(valueSupplier, builder, value -> {
+        testRepository.andIfNotNull(valueSupplier, builder, value -> {
             conditionInvoked.set(true);
-            return TestDocumentRepository.DOCUMENT_PATH.getString(TestEntity.Fields.name).eq(value);
+            return TestRepository.QDSL_PATH.getString(TestEntity.Fields.name).eq(value);
         });
     }
 
@@ -425,24 +426,24 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
         builder = new BooleanBuilder();
         conditionInvoked = new AtomicBoolean(false);
 
-        documentRepository.andIfNotBlank(valueSupplier, builder, value -> {
+        testRepository.andIfNotBlank(valueSupplier, builder, value -> {
             conditionInvoked.set(true);
-            return TestDocumentRepository.DOCUMENT_PATH.getString(TestEntity.Fields.name).eq(value);
+            return TestRepository.QDSL_PATH.getString(TestEntity.Fields.name).eq(value);
         });
     }
 
     /**
-     * Builds a test document referencing an author by ID.
+     * Builds a test entity referencing an author by ID.
      *
-     * @param id       document ID
-     * @param name     document name
+     * @param id       entity ID
+     * @param name     entity name
      * @param userId   owning user ID
      * @param metadata JSON-ish metadata value
      * @param authorId referenced author ID
-     * @return new document
+     * @return new entity
      */
-    private TestEntity newDocument(String id, String name, String userId, String metadata, String authorId) {
-        var author = authorRepository.getReferenceById(authorId);
+    private TestEntity createEntity(String id, String name, String userId, String metadata, String authorId) {
+        var author = testAuthorRepository.getReferenceById(authorId);
         return TestEntity.builder()
                 .id(id)
                 .name(name)
@@ -453,12 +454,12 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
     }
 
     /**
-     * Enhanced search repository over a non-FTS entity ({@link TestAuthor}), for pinning the fail-fast rejection of
-     * {@code rebuildFullTextSearchData()}. Never registered as a bean: the fragment is instantiated directly in steps,
-     * so no schema or repository scaffolding is needed.
+     * Enhanced search repository over a non-FTS entity ({@link TestAuthorEntity}), for pinning the fail-fast rejection
+     * of {@code rebuildFullTextSearchData()}. Never registered as a bean: the fragment is instantiated directly in
+     * steps, so no schema or repository scaffolding is needed.
      */
     private interface NonFtsSearchRepository
-            extends EnhancedJpaSearchRepository<TestAuthor, String, TestEntityNotFoundException, Void> {
+            extends EnhancedJpaSearchRepository<TestAuthorEntity, String, TestEntityNotFoundException, Void> {
 
         /**
          * {@inheritDoc}
@@ -472,7 +473,7 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
          * {@inheritDoc}
          */
         @Override
-        default Page<TestAuthor> findByFilter(Void filter, Pageable pageable) {
+        default Page<TestAuthorEntity> findByFilter(Void filter, Pageable pageable) {
             return Page.empty();
         }
     }

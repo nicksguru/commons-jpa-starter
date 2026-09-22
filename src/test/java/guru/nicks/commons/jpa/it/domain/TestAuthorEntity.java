@@ -22,7 +22,7 @@ import lombok.experimental.SuperBuilder;
 @Data
 @EqualsAndHashCode(callSuper = true)
 @SuperBuilder
-public class TestAuthor extends AuditableEntity<String> {
+public class TestAuthorEntity extends AuditableEntity<String> {
 
     @Id
     @Getter(onMethod_ = @Override)

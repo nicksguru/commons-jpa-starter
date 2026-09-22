@@ -57,13 +57,13 @@
             <artifactId>cucumber-test-starter</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Postgres container for the weighted-tsvector JDBC verification test -->
+        <!-- TestContainers PostgreSQL (TimescaleDB-HA) backing the Cucumber suite and the JDBC verification test -->
         <dependency>
             <groupId>guru.nicks.commons</groupId>
             <artifactId>integration-test-starter</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- JDBC driver the container test connects with (version managed by Spring Boot) -->
+        <!-- JDBC driver the tests connect with (version managed by Spring Boot) -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
@@ -91,12 +91,6 @@
         <dependency>
             <groupId>io.hypersistence</groupId>
             <artifactId>hypersistence-utils-hibernate-62</artifactId>
-        </dependency>
-        <!-- in-memory DB for the repository regression tests -->
-        <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <scope>test</scope>
         </dependency>
 
         <!-- @Builder, @Slf4j, etc. -->
