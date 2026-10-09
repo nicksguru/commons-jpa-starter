@@ -7,7 +7,6 @@ import jakarta.persistence.Embedded;
 import jakarta.persistence.MappedSuperclass;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Transient;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -60,13 +59,6 @@ import java.util.function.Consumer;
 @SuperBuilder
 @SuppressWarnings("java:S119") // allow non-single-letter type names in generics
 public abstract class AuditableEntity<ID> implements Persistable<ID>, Serializable {
-
-    /**
-     * If non-null, overrides default {@link #isNew()} behavior (checking for non-null {@link #getId()}).
-     */
-    @ToString.Exclude
-    @Transient
-    private Boolean isNew;
 
     /**
      * Date of creation. Should not be annotated with <code>@NotNull</code> because it's assigned automatically AFTER
@@ -151,28 +143,13 @@ public abstract class AuditableEntity<ID> implements Persistable<ID>, Serializab
     }
 
     /**
-     * Returns {@code true} if {@link #getId()} returns {@code null}. This behavior can be overridden by
-     * {@link #enforceNew(Boolean)}.
+     * Returns {@code true} if {@link #getId()} returns {@code null}.
      *
      * @return {@code true} if this entity should be treated as new for Hibernate
      */
     @Override
     public boolean isNew() {
-        if (isNew != null) {
-            return isNew;
-        }
-
         return getId() == null;
-    }
-
-    /**
-     * Manually sets the entity's new state flag. Use with caution, as this overrides automatic state management.
-     *
-     * @param isNew {@code true} if entity should be considered new, {@code false} otherwise, or {@code null} to apply
-     *              default {@link #isNew()} behavior (checking for non-null {@link #getId()})
-     */
-    public void enforceNew(Boolean isNew) {
-        this.isNew = isNew;
     }
 
     /**
