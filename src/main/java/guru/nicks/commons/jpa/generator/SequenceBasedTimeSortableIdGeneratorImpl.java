@@ -9,7 +9,7 @@ import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.generator.BeforeExecutionGenerator;
 import org.hibernate.generator.EventType;
 import org.hibernate.generator.EventTypeSets;
-import org.hibernate.id.factory.spi.CustomIdGeneratorCreationContext;
+import org.hibernate.generator.GeneratorCreationContext;
 import org.hibernate.internal.util.ReflectHelper;
 
 import java.lang.reflect.InvocationTargetException;
@@ -32,7 +32,7 @@ public class SequenceBasedTimeSortableIdGeneratorImpl implements BeforeExecution
     private final Method getter;
 
     public SequenceBasedTimeSortableIdGeneratorImpl(SequenceBasedTimeSortableIdGenerator annotation, Member idMember,
-            CustomIdGeneratorCreationContext context) {
+            GeneratorCreationContext context) {
         check(ReflectHelper.getPropertyType(idMember), idMember.getName()).constraint(
                 String.class::isAssignableFrom, "must be String to assign the value generated");
 

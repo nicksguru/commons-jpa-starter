@@ -14,7 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.generator.EventType;
-import org.hibernate.id.factory.spi.CustomIdGeneratorCreationContext;
+import org.hibernate.generator.GeneratorCreationContext;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -43,7 +43,7 @@ public class UuidV7GeneratorSteps {
     @Mock
     private UuidV7Generator annotation; // Mocked annotation
     @Mock
-    private CustomIdGeneratorCreationContext context; // Mocked context
+    private GeneratorCreationContext context; // Mocked context
     @Mock
     private SharedSessionContractImplementor session; // Mocked session
     private AutoCloseable closeableMocks;

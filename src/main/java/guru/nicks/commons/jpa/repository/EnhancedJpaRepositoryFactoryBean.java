@@ -3,6 +3,8 @@ package guru.nicks.commons.jpa.repository;
 import guru.nicks.commons.jpa.JpaInference;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import jakarta.persistence.EntityManager;
 import org.springframework.context.ApplicationContext;
 import org.springframework.data.domain.Persistable;
@@ -32,27 +34,35 @@ public class EnhancedJpaRepositoryFactoryBean<
         ID extends Serializable>
         extends JpaRepositoryFactoryBean<R, T, ID> {
 
+    /**
+     * Jackson 2 mapper built locally: Spring Boot 4 autoconfigures Jackson 3 only (no Jackson 2 ObjectMapper bean
+     * anymore), so repositories can't rely on bean injection. Java 8 dates are processed the same way the former
+     * Boot-provided mapper did.
+     */
+    private static final ObjectMapper OBJECT_MAPPER = JsonMapper.builder()
+            .addModule(new JavaTimeModule())
+            .build();
+
     private final ApplicationContext applicationContext;
     private final JpaInference jpaInference;
-    private final ObjectMapper objectMapper;
 
     /**
      * Autowired constructor.
      *
      * @param repositoryInterface repository interface,  must not be {@code null}
      * @param applicationContext  application context, must not be {@code null}
+     * @param jpaInference        JPA inference helper, must not be {@code null}
      */
-    public EnhancedJpaRepositoryFactoryBean(Class<? extends R> repositoryInterface, ObjectMapper objectMapper,
+    public EnhancedJpaRepositoryFactoryBean(Class<? extends R> repositoryInterface,
             ApplicationContext applicationContext, JpaInference jpaInference) {
         super(repositoryInterface);
-        this.objectMapper = objectMapper;
         this.applicationContext = applicationContext;
         this.jpaInference = jpaInference;
     }
 
     @Override
     protected RepositoryFactorySupport createRepositoryFactory(EntityManager entityManager) {
-        return new EnhancedJpaRepositoryFactory(entityManager, applicationContext, jpaInference, objectMapper);
+        return new EnhancedJpaRepositoryFactory(entityManager, applicationContext, jpaInference, OBJECT_MAPPER);
     }
 
 }

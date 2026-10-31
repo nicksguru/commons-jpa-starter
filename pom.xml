@@ -5,14 +5,14 @@
     <parent>
         <groupId>guru.nicks.commons</groupId>
         <artifactId>parent</artifactId>
-        <version>100.261014.0</version><!-- BUNDLE_VERSION -->
+        <version>400.261031.0</version><!-- BUNDLE_VERSION -->
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
     <!-- groupId is redundant (inherited from parent), but required by Maven Central -->
     <groupId>guru.nicks.commons</groupId>
     <artifactId>jpa-starter</artifactId>
-    <version>100.261014.0</version><!-- BUNDLE_VERSION -->
+    <version>400.261031.0</version><!-- BUNDLE_VERSION -->
 
     <name>Nicks.Guru Commons JPA Starter</name>
     <description>JPA starter</description>
@@ -43,6 +43,12 @@
     </issueManagement>
 
     <dependencies>
+        <!-- @NullMarked -->
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
+
         <!-- JtsGeoMapper -->
         <dependency>
             <groupId>guru.nicks.commons</groupId>
@@ -87,10 +93,10 @@
             <groupId>org.hibernate.orm</groupId>
             <artifactId>hibernate-spatial</artifactId>
         </dependency>
-        <!-- JSON and other non-standard data types -->
+        <!-- JSON and other non-standard data types ('71' artifact supports Hibernate ORM 7.1/7.2) -->
         <dependency>
             <groupId>io.hypersistence</groupId>
-            <artifactId>hypersistence-utils-hibernate-62</artifactId>
+            <artifactId>hypersistence-utils-hibernate-71</artifactId>
         </dependency>
 
         <!-- @Builder, @Slf4j, etc. -->
@@ -103,19 +109,8 @@
 
     <build>
         <plugins>
-            <!-- Version and flags come from root pluginManagement.
-                 WARNING: this plugin must be mentioned EXPLICITLY in ALL modules that declare JPA entities. -->
-            <plugin>
-                <groupId>org.hibernate.orm.tooling</groupId>
-                <artifactId>hibernate-enhance-maven-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>enhance</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
+            <!-- NOTE: Hibernate bytecode enhancement was dropped (see parent pom): no Hibernate 7 GA of the
+                 enhancement plugin exists; lazy loading works via standard proxies without it. -->
 
             <!-- generates Querydsl Q-classes for TEST entities: the stock Spring Data JPA Querydsl fragment
                  resolves entity paths via the Q-class convention (SimpleEntityPathResolver), so repositories

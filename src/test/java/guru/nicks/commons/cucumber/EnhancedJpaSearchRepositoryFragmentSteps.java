@@ -14,6 +14,8 @@ import guru.nicks.commons.jpa.it.repo.WeightedTestRepository;
 import guru.nicks.commons.jpa.repository.EnhancedJpaSearchRepository;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.Predicate;
 import io.cucumber.java.en.Given;
@@ -51,7 +53,8 @@ public class EnhancedJpaSearchRepositoryFragmentSteps {
     private final TextWorld textWorld;
     private final JpaInference jpaInference;
     private final EntityManager entityManager;
-    private final ObjectMapper objectMapper;
+    // Jackson 2 mapper built locally: Boot 4 doesn't provide an ObjectMapper bean anymore
+    private final ObjectMapper objectMapper = JsonMapper.builder().addModule(new JavaTimeModule()).build();
     private final ApplicationContext applicationContext;
 
     private Page<TestEntity> resultPage;

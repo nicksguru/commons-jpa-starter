@@ -7,7 +7,7 @@ import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.generator.BeforeExecutionGenerator;
 import org.hibernate.generator.EventType;
 import org.hibernate.generator.EventTypeSets;
-import org.hibernate.id.factory.spi.CustomIdGeneratorCreationContext;
+import org.hibernate.generator.GeneratorCreationContext;
 import org.hibernate.internal.util.ReflectHelper;
 
 import java.lang.reflect.InvocationTargetException;
@@ -27,7 +27,7 @@ public class UuidV4CrockfordBase32GeneratorImpl implements BeforeExecutionGenera
 
     @SuppressWarnings("java:S1172") // unused parameters
     public UuidV4CrockfordBase32GeneratorImpl(UuidV4CrockfordBase32Generator annotation, Member idMember,
-            CustomIdGeneratorCreationContext context) {
+            GeneratorCreationContext context) {
         check(ReflectHelper.getPropertyType(idMember), idMember.getName()).constraint(
                 String.class::isAssignableFrom, "must be String to assign the value generated");
         getter = ReflectHelper.getGetterOrNull(idMember.getDeclaringClass(), idMember.getName());

@@ -7,7 +7,7 @@ import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.generator.BeforeExecutionGenerator;
 import org.hibernate.generator.EventType;
 import org.hibernate.generator.EventTypeSets;
-import org.hibernate.id.factory.spi.CustomIdGeneratorCreationContext;
+import org.hibernate.generator.GeneratorCreationContext;
 import org.hibernate.internal.util.ReflectHelper;
 
 import java.lang.reflect.InvocationTargetException;
@@ -26,7 +26,7 @@ public class UuidV7GeneratorImpl implements BeforeExecutionGenerator {
     private final Method getter;
 
     @SuppressWarnings("java:S1172") // unused parameters
-    public UuidV7GeneratorImpl(UuidV7Generator annotation, Member idMember, CustomIdGeneratorCreationContext context) {
+    public UuidV7GeneratorImpl(UuidV7Generator annotation, Member idMember, GeneratorCreationContext context) {
         check(ReflectHelper.getPropertyType(idMember), idMember.getName()).constraint(
                 UUID.class::isAssignableFrom, "must be UUID to assign the value generated");
         getter = ReflectHelper.getGetterOrNull(idMember.getDeclaringClass(), idMember.getName());
